@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE="ghcr.io/recmanj/dev-containers/claude:latest"
+CONTAINER_HOME=/home/dev
+HOST_PATH="$(pwd)"
+
+exec podman run -it --rm \
+  --userns=keep-id:uid=1000,gid=1000 \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges \
+  --pid=host \
+  --read-only \
+  --tmpfs /tmp \
+  --memory=8g \
+  --cpus=4 \
+  -v ~/.claude.json:$CONTAINER_HOME/.claude.json \
+  -v ~/.claude:$CONTAINER_HOME/.claude \
+  -v "$HOST_PATH":"$HOST_PATH" \
+  -w "$HOST_PATH" \
+  -- \
+  "$IMAGE" \
+  "$@"

@@ -25,6 +25,7 @@ ENV FNM_DIR=/home/${USER}/.fnm
 RUN curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "/home/${USER}/.fnm" --skip-shell
 ENV PATH="/home/${USER}/.fnm:${PATH}"
 RUN fnm install 25
+ENV PATH="/home/${USER}/.fnm/aliases/default/bin:${PATH}"
 RUN echo 'eval "$(fnm env --use-on-cd --shell bash)"' >> ~/.bashrc
 
 WORKDIR /home/${USER}/workspace
