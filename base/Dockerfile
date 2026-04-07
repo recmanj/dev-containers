@@ -6,10 +6,11 @@ ARG USER=dev
 RUN apt-get update \
     && apt-get --no-install-recommends install -y \
     build-essential \
-    ca-certificates \
-    python3-dev \
-    git \
     curl \
+    ca-certificates \
+    git \
+    less \
+    python3-dev \
     unzip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
