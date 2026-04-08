@@ -7,6 +7,14 @@ HOST_PATH="$(pwd)"
 VOLUME_NAME="dev-container-$(printf '%s' "$HOST_PATH" | shasum -a 256 | cut -c1-12)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
 
+PORTS=()
+while [[ $# -gt 0 && "$1" == "-p" ]]; do
+  [[ -z "${2:-}" ]] && echo "error: -p requires a port argument" >&2 && exit 1
+  PORTS+=(-p "$2")
+  shift 2
+done
+[[ "${1:-}" == "--" ]] && shift
+
 exec podman run -it --rm \
   --userns=keep-id:uid=1000,gid=1000 \
   --cap-drop=ALL \
@@ -20,6 +28,7 @@ exec podman run -it --rm \
   -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github" \
   -v "$LOCAL_CONFIG_PATH/kubeconfig":"$CONTAINER_HOME/.kube/config" \
   -w "$HOST_PATH" \
+  ${PORTS[@]+"${PORTS[@]}"} \
   -- \
   "$IMAGE" \
   "${@:-bash}"
