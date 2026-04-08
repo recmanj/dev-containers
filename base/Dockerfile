@@ -32,6 +32,16 @@ RUN KUSTOMIZE_VERSION=v5.8.1 \
     && curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_${TARGETARCH}.tar.gz" \
     | tar -C /usr/local/bin -xz kustomize
 
+# Install pixi
+RUN PIXI_VERSION=0.67.0 \
+    && case "${TARGETARCH}" in \
+        amd64) PIXI_ARCH=x86_64 ;; \
+        arm64) PIXI_ARCH=aarch64 ;; \
+    esac \
+    && curl -fsSL "https://github.com/prefix-dev/pixi/releases/download/v${PIXI_VERSION}/pixi-${PIXI_ARCH}-unknown-linux-musl" \
+        -o /usr/local/bin/pixi \
+    && chmod +x /usr/local/bin/pixi
+
 RUN useradd -ms /bin/bash ${USER}
 USER ${USER}
 
@@ -40,6 +50,9 @@ ENV PATH="/home/${USER}/.local/bin:${PATH}"
 # Set uv cache / tool dir environment variables
 ENV UV_CACHE_DIR=/tmp/uv-cache
 ENV UV_TOOL_DIR=/tmp/uv-tools
+
+# Set pixi cache dir
+ENV PIXI_CACHE_DIR=/tmp/pixi-cache
 
 # Install Node.js
 ENV FNM_DIR=/home/${USER}/.fnm
