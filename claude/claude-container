@@ -4,6 +4,7 @@ set -euo pipefail
 IMAGE="ghcr.io/recmanj/dev-containers/claude:latest"
 CONTAINER_HOME=/home/dev
 HOST_PATH="$(pwd)"
+LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
 
 exec podman run -it --rm \
   --userns=keep-id:uid=1000,gid=1000 \
@@ -14,9 +15,11 @@ exec podman run -it --rm \
   --tmpfs /tmp \
   --memory=8g \
   --cpus=4 \
+  --env-file "$LOCAL_CONFIG_PATH/.env" \
   -v ~/.claude.json:$CONTAINER_HOME/.claude.json \
   -v ~/.claude:$CONTAINER_HOME/.claude \
   -v "$HOST_PATH":"$HOST_PATH" \
+  -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github" \
   -w "$HOST_PATH" \
   -- \
   "$IMAGE" \
