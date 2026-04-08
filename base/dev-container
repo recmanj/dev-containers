@@ -18,6 +18,7 @@ exec podman run -it --rm \
   -v "$VOLUME_NAME":$CONTAINER_HOME \
   -v "$HOST_PATH":"$HOST_PATH" \
   -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github" \
+  -v "$LOCAL_CONFIG_PATH/kubeconfig":"$CONTAINER_HOME/.kube/config" \
   -w "$HOST_PATH" \
   -- \
   "$IMAGE" \

@@ -1,4 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.11.3 AS uv
+FROM bitnami/kubectl:latest AS kubectl
+FROM alpine/helm:4.1.3 AS helm
 FROM debian:trixie
 
 ARG USER=dev
@@ -22,6 +24,13 @@ ARG TARGETARCH
 RUN GH_VERSION=2.89.0 \
     && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
     | tar -C /usr/local -xz --strip-components=1 --wildcards '*/bin/*' '*/share/*'
+
+# Install Kubernetes tools
+COPY --from=kubectl /opt/bitnami/kubectl/bin/kubectl /usr/local/bin/kubectl
+COPY --from=helm /usr/bin/helm /usr/local/bin/helm
+RUN KUSTOMIZE_VERSION=v5.8.1 \
+    && curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_${TARGETARCH}.tar.gz" \
+    | tar -C /usr/local/bin -xz kustomize
 
 RUN useradd -ms /bin/bash ${USER}
 USER ${USER}
