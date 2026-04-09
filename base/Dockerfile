@@ -11,11 +11,18 @@ RUN apt-get update \
     curl \
     ca-certificates \
     git \
+    jq \
     less \
+    openssh-client \
+    python-is-python3 \
     python3-dev \
+    python3-pip \
     unzip \
+    yq \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --break-system-packages PyYAML
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
