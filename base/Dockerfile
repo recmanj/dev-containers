@@ -3,6 +3,8 @@ FROM bitnami/kubectl:latest AS kubectl
 FROM alpine/helm:4.1.3 AS helm
 FROM debian:trixie
 
+LABEL devcontainer.metadata='[]'
+
 ARG USER=dev
 
 RUN apt-get update \
