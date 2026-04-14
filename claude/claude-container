@@ -10,16 +10,13 @@ exec podman run -it --rm \
   --userns=keep-id:uid=1000,gid=1000 \
   --cap-drop=ALL \
   --security-opt=no-new-privileges \
-  --pid=host \
-  --read-only \
-  --tmpfs /tmp \
   --memory=8g \
   --cpus=4 \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
   -v ~/.claude.json:$CONTAINER_HOME/.claude.json \
   -v ~/.claude:$CONTAINER_HOME/.claude \
   -v "$HOST_PATH":"$HOST_PATH" \
-  -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github" \
+  -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github":ro \
   -w "$HOST_PATH" \
   -- \
   "$IMAGE" \
