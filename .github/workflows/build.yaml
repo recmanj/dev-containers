@@ -27,3 +27,9 @@ jobs:
     uses: ./.github/workflows/build-image.yaml
     with:
       context: codex
+
+  build-opencode:
+    needs: build-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: opencode
