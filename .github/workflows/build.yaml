@@ -21,3 +21,9 @@ jobs:
     uses: ./.github/workflows/build-image.yaml
     with:
       context: claude
+
+  build-codex:
+    needs: build-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: codex
