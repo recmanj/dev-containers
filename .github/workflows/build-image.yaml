@@ -39,9 +39,9 @@ jobs:
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: ${{ inputs.context }}
-          push: ${{ github.event_name == 'push' }}
+          push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ inputs.context }}
+          cache-from: ${{ github.event_name != 'schedule' && format('type=gha,scope={0}', inputs.context) || '' }}
           cache-to: type=gha,mode=max,scope=${{ inputs.context }}
