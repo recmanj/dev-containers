@@ -13,6 +13,7 @@ RUN apt-get update \
     curl \
     ca-certificates \
     git \
+    just \
     jq \
     less \
     openssh-client \
