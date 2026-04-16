@@ -4,6 +4,10 @@ on:
       context:
         required: true
         type: string
+      no-cache:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -43,5 +47,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: ${{ github.event_name != 'schedule' && format('type=gha,scope={0}', inputs.context) || '' }}
+          cache-from: ${{ github.event_name != 'schedule' && !inputs.no-cache && format('type=gha,scope={0}', inputs.context) || '' }}
           cache-to: type=gha,mode=max,scope=${{ inputs.context }}

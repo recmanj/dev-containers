@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "0 4 * * *"
   workflow_dispatch:
+    inputs:
+      no-cache:
+        description: Build without cache
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,21 +21,25 @@ jobs:
     uses: ./.github/workflows/build-image.yaml
     with:
       context: base
+      no-cache: ${{ inputs.no-cache == true }}
 
   build-claude:
     needs: build-base
     uses: ./.github/workflows/build-image.yaml
     with:
       context: claude
+      no-cache: ${{ inputs.no-cache == true }}
 
   build-codex:
     needs: build-base
     uses: ./.github/workflows/build-image.yaml
     with:
       context: codex
+      no-cache: ${{ inputs.no-cache == true }}
 
   build-opencode:
     needs: build-base
     uses: ./.github/workflows/build-image.yaml
     with:
       context: opencode
+      no-cache: ${{ inputs.no-cache == true }}
