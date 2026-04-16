@@ -1,6 +1,6 @@
-FROM ghcr.io/astral-sh/uv:0.11.3 AS uv
+FROM ghcr.io/astral-sh/uv:0.11.7 AS uv
 FROM bitnami/kubectl:latest AS kubectl
-FROM alpine/helm:4.1.3 AS helm
+FROM alpine/helm:4.1.4 AS helm
 FROM debian:trixie
 
 LABEL devcontainer.metadata='[]'
@@ -17,6 +17,7 @@ RUN apt-get update \
     jq \
     less \
     openssh-client \
+    pre-commit \
     python-is-python3 \
     python3-dev \
     python3-pip \
