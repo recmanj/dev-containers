@@ -21,6 +21,7 @@ RUN apt-get update \
     python-is-python3 \
     python3-dev \
     python3-pip \
+    ripgrep \
     unzip \
     yq \
     && apt-get clean \
