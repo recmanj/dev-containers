@@ -9,11 +9,13 @@ LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
 exec podman run -it --rm \
   --userns=keep-id:uid=1000,gid=1000 \
   --cap-drop=ALL \
+  --cap-add=SYS_ADMIN \
   --security-opt=no-new-privileges \
+  --security-opt seccomp=unconfined \
+  --security-opt label=disable \
   --memory=8g \
   --cpus=4 \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
-  -e AZURE_OPENAI_API_KEY \
   -v ~/.codex:$CONTAINER_HOME/.codex \
   -v "$HOST_PATH":"$HOST_PATH" \
   -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github":ro \
