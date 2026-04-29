@@ -10,8 +10,9 @@ ARG USER=dev
 RUN apt-get update \
     && apt-get --no-install-recommends install -y \
     build-essential \
-    curl \
     ca-certificates \
+    cmake \
+    curl \
     git \
     just \
     jq \
