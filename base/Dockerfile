@@ -17,6 +17,7 @@ RUN apt-get update \
     just \
     jq \
     less \
+    libboost-all-dev \
     openssh-client \
     pre-commit \
     python-is-python3 \
