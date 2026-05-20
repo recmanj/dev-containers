@@ -16,12 +16,7 @@ done
 [[ "${1:-}" == "--" ]] && shift
 
 exec podman run -it --rm \
-  --userns=keep-id:uid=1000,gid=1000 \
-  --cap-drop=ALL \
-  --security-opt=no-new-privileges \
-  --tmpfs /tmp \
-  --memory=8g \
-  --cpus=4 \
+  --userns=keep-id \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
   -v "$VOLUME_NAME":$CONTAINER_HOME \
   -v "$HOST_PATH":"$HOST_PATH" \

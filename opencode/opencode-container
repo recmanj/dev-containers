@@ -2,62 +2,14 @@
 set -euo pipefail
 
 IMAGE="ghcr.io/recmanj/dev-containers/opencode:latest"
-OLLAMA_IMAGE="ollama/ollama"
-OLLAMA_CONTAINER="opencode-ollama"
-OLLAMA_VOLUME="opencode-ollama"
-NETWORK="opencode-net"
-MODEL="${OPENCODE_MODEL:-glm-5.1:cloud}"
 CONTAINER_HOME=/home/dev
 HOST_PATH="$(pwd)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
 
-# --- Ensure network exists ---
-podman network exists "$NETWORK" 2>/dev/null \
-  || podman network create "$NETWORK"
-
-# --- Ensure ollama volume exists ---
-podman volume exists "$OLLAMA_VOLUME" 2>/dev/null \
-  || podman volume create "$OLLAMA_VOLUME"
-
-# --- Ensure ollama container exists and is running ---
-if ! podman container exists "$OLLAMA_CONTAINER" 2>/dev/null; then
-  # First run: create ollama, pull model
-  podman run -d \
-    --name "$OLLAMA_CONTAINER" \
-    --network "$NETWORK" \
-    -v "$OLLAMA_VOLUME":/root/.ollama \
-    -e OLLAMA_HOST=0.0.0.0:11434 \
-    -e OLLAMA_API_KEY \
-    "$OLLAMA_IMAGE"
-
-  # Wait for ollama to be ready
-  until podman exec "$OLLAMA_CONTAINER" ollama list &>/dev/null; do
-    sleep 1
-  done
-
-  # Pull model (one-time)
-  podman exec "$OLLAMA_CONTAINER" ollama pull "$MODEL"
-
-elif ! podman inspect --format '{{.State.Running}}' "$OLLAMA_CONTAINER" 2>/dev/null \
-      | grep -q true; then
-  # Container exists but stopped — restart it
-  podman start "$OLLAMA_CONTAINER"
-
-  until podman exec "$OLLAMA_CONTAINER" ollama list &>/dev/null; do
-    sleep 1
-  done
-fi
-
-# --- Run opencode ---
 exec podman run -it --rm \
   --network "$NETWORK" \
-  --userns=keep-id:uid=1000,gid=1000 \
-  --cap-drop=ALL \
-  --security-opt=no-new-privileges \
-  --memory=8g \
-  --cpus=4 \
+  --userns=keep-id \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
-  -e OLLAMA_HOST=http://ollama:11434 \
   -v ~/.config/opencode:$CONTAINER_HOME/.config/opencode \
   -v ~/.local/share/opencode:$CONTAINER_HOME/.local/share/opencode \
   -v "$HOST_PATH":"$HOST_PATH" \
