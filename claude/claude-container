@@ -4,6 +4,7 @@ set -euo pipefail
 IMAGE="ghcr.io/recmanj/dev-containers/claude:latest"
 CONTAINER_HOME=/home/dev
 HOST_PATH="$(pwd)"
+VOLUME_NAME="dev-container-$(printf '%s' "$HOST_PATH" | shasum -a 256 | cut -c1-12)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
 
 exec podman run -it --rm \
@@ -12,6 +13,8 @@ exec podman run -it --rm \
   -v ~/.claude.json:$CONTAINER_HOME/.claude.json \
   -v ~/.claude:$CONTAINER_HOME/.claude \
   -v "$HOST_PATH":"$HOST_PATH" \
+  -v "$VOLUME_NAME-venv":"$HOST_PATH/.venv" \
+  -v "$VOLUME_NAME-node_modules":"$HOST_PATH/node_modules" \
   -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github":ro \
   -w "$HOST_PATH" \
   -- \

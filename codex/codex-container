@@ -4,6 +4,7 @@ set -euo pipefail
 IMAGE="ghcr.io/recmanj/dev-containers/codex:latest"
 CONTAINER_HOME=/home/dev
 HOST_PATH="$(pwd)"
+VOLUME_NAME="dev-container-$(printf '%s' "$HOST_PATH" | shasum -a 256 | cut -c1-12)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
 TTY_FLAGS=(-i)
 [ -t 0 ] && [ -t 1 ] && TTY_FLAGS=(-it)
@@ -14,6 +15,8 @@ exec podman run "${TTY_FLAGS[@]}" --rm \
   -e AZURE_OPENAI_API_KEY \
   -v ~/.codex:$CONTAINER_HOME/.codex \
   -v "$HOST_PATH":"$HOST_PATH" \
+  -v "$VOLUME_NAME-venv":"$HOST_PATH/.venv" \
+  -v "$VOLUME_NAME-node_modules":"$HOST_PATH/node_modules" \
   -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github":ro \
   -w "$HOST_PATH" \
   -- \
