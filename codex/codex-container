@@ -5,8 +5,10 @@ IMAGE="ghcr.io/recmanj/dev-containers/codex:latest"
 CONTAINER_HOME=/home/dev
 HOST_PATH="$(pwd)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
+TTY_FLAGS=(-i)
+[ -t 0 ] && [ -t 1 ] && TTY_FLAGS=(-it)
 
-exec podman run -it --rm \
+exec podman run "${TTY_FLAGS[@]}" --rm \
   --userns=keep-id \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
   -e AZURE_OPENAI_API_KEY \
