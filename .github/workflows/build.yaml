@@ -43,3 +43,10 @@ jobs:
     with:
       context: opencode
       no-cache: ${{ inputs.no-cache == true }}
+
+  build-pi:
+    needs: build-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: pi
+      no-cache: ${{ inputs.no-cache == true }}
