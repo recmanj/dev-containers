@@ -72,7 +72,7 @@ ENV PIXI_CACHE_DIR=/tmp/pixi-cache
 ENV FNM_DIR=/home/${USER}/.fnm
 RUN curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir ${FNM_DIR} --skip-shell
 ENV PATH="${FNM_DIR}:${PATH}"
-RUN fnm install 25
+RUN fnm install 26
 ENV PATH="${FNM_DIR}/aliases/default/bin:${PATH}"
 RUN echo 'eval "$(fnm env --use-on-cd --shell bash)"' >> ~/.bashrc
 
