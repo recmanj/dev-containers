@@ -56,6 +56,12 @@ RUN PIXI_VERSION=0.68.1 \
         -o /usr/local/bin/pixi \
     && chmod +x /usr/local/bin/pixi
 
+# Install OpenTofu
+ADD https://get.opentofu.org/install-opentofu.sh /var/tmp/install-opentofu.sh
+RUN chmod +x /var/tmp/install-opentofu.sh \
+    && /var/tmp/install-opentofu.sh --install-method deb \
+    && rm -f /var/tmp/install-opentofu.sh
+
 RUN useradd -ms /bin/bash ${USER}
 USER ${USER}
 
@@ -67,6 +73,11 @@ ENV UV_TOOL_DIR=/tmp/uv-tools
 
 # Set pixi cache dir
 ENV PIXI_CACHE_DIR=/tmp/pixi-cache
+
+# Install Ansible
+RUN UV_TOOL_DIR=/home/${USER}/.local/share/uv/tools \
+    UV_TOOL_BIN_DIR=/home/${USER}/.local/bin \
+    uv tool install ansible-core --with ansible
 
 # Install Node.js
 ENV FNM_DIR=/home/${USER}/.fnm
