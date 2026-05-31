@@ -56,6 +56,12 @@ RUN PIXI_VERSION=0.68.1 \
         -o /usr/local/bin/pixi \
     && chmod +x /usr/local/bin/pixi
 
+# Install OpenTofu
+ADD https://get.opentofu.org/install-opentofu.sh /var/tmp/install-opentofu.sh
+RUN chmod +x /var/tmp/install-opentofu.sh \
+    && /var/tmp/install-opentofu.sh --install-method deb \
+    && rm -f /var/tmp/install-opentofu.sh
+
 RUN useradd -ms /bin/bash ${USER}
 USER ${USER}
 
