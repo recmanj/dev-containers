@@ -74,6 +74,11 @@ ENV UV_TOOL_DIR=/tmp/uv-tools
 # Set pixi cache dir
 ENV PIXI_CACHE_DIR=/tmp/pixi-cache
 
+# Install Ansible
+RUN UV_TOOL_DIR=/home/${USER}/.local/share/uv/tools \
+    UV_TOOL_BIN_DIR=/home/${USER}/.local/bin \
+    uv tool install ansible-core --with ansible
+
 # Install Node.js
 ENV FNM_DIR=/home/${USER}/.fnm
 RUN curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir ${FNM_DIR} --skip-shell
