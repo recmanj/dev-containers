@@ -37,6 +37,13 @@ jobs:
       context: codex
       no-cache: ${{ inputs.no-cache == true }}
 
+  build-gemini:
+    needs: build-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: gemini
+      no-cache: ${{ inputs.no-cache == true }}
+
   build-opencode:
     needs: build-base
     uses: ./.github/workflows/build-image.yaml
