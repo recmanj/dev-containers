@@ -11,6 +11,8 @@ TTY_FLAGS=(-i)
 
 exec podman run "${TTY_FLAGS[@]}" --rm \
   --userns=keep-id \
+  --security-opt no-new-privileges \
+  --cap-drop all \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
   -v ~/.gemini:$CONTAINER_HOME/.gemini \
   -v "$HOST_PATH":"$HOST_PATH" \

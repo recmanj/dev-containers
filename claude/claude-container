@@ -9,6 +9,8 @@ LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
 
 exec podman run -it --rm \
   --userns=keep-id \
+  --security-opt no-new-privileges \
+  --cap-drop all \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
   -v ~/.claude.json:$CONTAINER_HOME/.claude.json \
   -v ~/.claude:$CONTAINER_HOME/.claude \

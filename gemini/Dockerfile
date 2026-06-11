@@ -1,4 +1,4 @@
-FROM ghcr.io/recmanj/dev-containers/base:latest
+FROM ghcr.io/recmanj/dev-containers/base-browser:latest
 
 ARG GEMINI_CLI_VERSION=latest
 

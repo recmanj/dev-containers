@@ -23,36 +23,43 @@ jobs:
       context: base
       no-cache: ${{ inputs.no-cache == true }}
 
-  build-claude:
+  build-base-browser:
     needs: build-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: base-browser
+      no-cache: ${{ inputs.no-cache == true }}
+
+  build-claude:
+    needs: build-base-browser
     uses: ./.github/workflows/build-image.yaml
     with:
       context: claude
       no-cache: ${{ inputs.no-cache == true }}
 
   build-codex:
-    needs: build-base
+    needs: build-base-browser
     uses: ./.github/workflows/build-image.yaml
     with:
       context: codex
       no-cache: ${{ inputs.no-cache == true }}
 
   build-gemini:
-    needs: build-base
+    needs: build-base-browser
     uses: ./.github/workflows/build-image.yaml
     with:
       context: gemini
       no-cache: ${{ inputs.no-cache == true }}
 
   build-opencode:
-    needs: build-base
+    needs: build-base-browser
     uses: ./.github/workflows/build-image.yaml
     with:
       context: opencode
       no-cache: ${{ inputs.no-cache == true }}
 
   build-pi:
-    needs: build-base
+    needs: build-base-browser
     uses: ./.github/workflows/build-image.yaml
     with:
       context: pi
