@@ -23,6 +23,13 @@ jobs:
       context: base
       no-cache: ${{ inputs.no-cache == true }}
 
+  build-base-browser:
+    needs: build-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: base-browser
+      no-cache: ${{ inputs.no-cache == true }}
+
   build-claude:
     needs: build-base
     uses: ./.github/workflows/build-image.yaml
