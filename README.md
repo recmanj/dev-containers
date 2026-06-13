@@ -26,7 +26,9 @@ all`).
 Chromium runs with `--no-sandbox` inside the container: its own sandbox cannot
 initialize under rootless podman, and the hardened container is the sandbox
 boundary instead. `--isolated` keeps the browser profile in memory, matching
-the ephemeral `--rm` containers.
+the ephemeral `--rm` containers. `--browser chromium` is required: without it
+the MCP server defaults to the Google Chrome channel, which is not installed
+in the image (and cannot be installed at runtime by the non-root user).
 
 Agent configs are mounted from the host, so registering the MCP server is a
 one-time action per agent:
@@ -34,7 +36,7 @@ one-time action per agent:
 **Claude Code** (inside the container; persists via the mounted `~/.claude.json`):
 
 ```sh
-claude mcp add playwright -- playwright-mcp --headless --no-sandbox --isolated
+claude mcp add playwright -- playwright-mcp --browser chromium --headless --no-sandbox --isolated
 ```
 
 **Gemini CLI** (`~/.gemini/settings.json`):
@@ -44,7 +46,7 @@ claude mcp add playwright -- playwright-mcp --headless --no-sandbox --isolated
   "mcpServers": {
     "playwright": {
       "command": "playwright-mcp",
-      "args": ["--headless", "--no-sandbox", "--isolated"]
+      "args": ["--browser", "chromium", "--headless", "--no-sandbox", "--isolated"]
     }
   }
 }
@@ -55,7 +57,7 @@ claude mcp add playwright -- playwright-mcp --headless --no-sandbox --isolated
 ```toml
 [mcp_servers.playwright]
 command = "playwright-mcp"
-args = ["--headless", "--no-sandbox", "--isolated"]
+args = ["--browser", "chromium", "--headless", "--no-sandbox", "--isolated"]
 ```
 
 **opencode** (`~/.config/opencode/opencode.json`):
@@ -65,7 +67,7 @@ args = ["--headless", "--no-sandbox", "--isolated"]
   "mcp": {
     "playwright": {
       "type": "local",
-      "command": ["playwright-mcp", "--headless", "--no-sandbox", "--isolated"],
+      "command": ["playwright-mcp", "--browser", "chromium", "--headless", "--no-sandbox", "--isolated"],
       "enabled": true
     }
   }
