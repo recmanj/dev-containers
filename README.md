@@ -6,17 +6,19 @@ Podman container images for AI coding agents, published to
 Image hierarchy:
 
 ```
-base ── base-browser ── claude
-                     ── gemini
-                     ── codex
-                     ── opencode
-                     ── pi
+base ── base-agent ── claude
+                   ── gemini
+                   ── codex
+                   ── opencode
+                   ── pi
 ```
 
-`base` holds the common dev toolchain (Node via fnm, uv, pixi, k8s tools, …).
-`base-browser` adds Playwright Chromium and the [Playwright MCP
+`base` holds the common dev toolchain (Node via fnm, uv, pixi, k8s tools, …)
+and is also usable standalone for non-AI dev work. `base-agent` builds on
+`base` and adds Playwright Chromium, the [Playwright MCP
 server](https://github.com/microsoft/playwright-mcp) (`playwright-mcp`,
-pre-installed globally), which all agent images inherit. Each agent directory
+pre-installed globally), and the [rtk](https://github.com/rtk-ai/rtk)
+token-saving CLI proxy — all inherited by every agent image. Each agent directory
 ships a `<name>-container` wrapper script that runs the image with rootless
 podman (`--userns=keep-id`, `--security-opt no-new-privileges`, `--cap-drop
 all`).
@@ -75,6 +77,48 @@ args = ["--browser", "chromium", "--headless", "--no-sandbox", "--isolated"]
 ```
 
 Upgrading the browser stack: bump `PLAYWRIGHT_MCP_VERSION` in
-`base-browser/Dockerfile` only — Chromium is downloaded via the playwright
-version bundled inside `@playwright/mcp`, so the two cannot drift. Dependabot
-does not track this ARG.
+`base-agent/Dockerfile` only — Chromium is downloaded via the playwright
+version bundled inside `@playwright/mcp`, so the two cannot drift.
+
+## rtk (token-saving proxy)
+
+The `rtk` binary is pre-installed in the `base-agent` image (pinned via
+`RTK_VERSION` in `base-agent/Dockerfile`.
+
+Agent configs are mounted from the host, so registering rtk's per-agent hook
+is a one-time action per agent (writes land in the host-mounted config dir and
+persist across containers):
+
+**Claude Code** (inside the container; persists via the mounted `~/.claude`):
+
+```sh
+rtk init -g
+```
+
+**Gemini CLI** (persists via the mounted `~/.gemini`):
+
+```sh
+rtk init -g --gemini
+```
+
+**Codex** (persists via the mounted `~/.codex`):
+
+```sh
+rtk init -g --codex
+```
+
+**opencode** (persists via the mounted `~/.config/opencode`):
+
+```sh
+rtk init -g --opencode
+```
+
+**pi** (persists via the mounted `~/.pi/agent`):
+
+```sh
+rtk init -g --agent pi
+```
+
+Verify the hook is active with `rtk init --show` (where supported) or run
+`rtk gain` after a session to see token savings. Disable rtk for a single
+command with `RTK_DISABLED=1 <cmd>`.

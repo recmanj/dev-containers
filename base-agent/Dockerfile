@@ -2,6 +2,7 @@ FROM ghcr.io/recmanj/dev-containers/base:latest
 
 ARG USER=dev
 ARG PLAYWRIGHT_MCP_VERSION=0.0.76
+ARG RTK_VERSION=0.42.4
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/home/${USER}/.cache/ms-playwright
 
@@ -20,3 +21,12 @@ RUN cd "$(npm root -g)/@playwright/mcp" \
 USER ${USER}
 
 RUN playwright-mcp --version
+
+# Install rtk (Rust Token Killer) — token-saving CLI proxy shared by all agent
+# images that inherit base-agent. Pinned via RTK_VERSION; the upstream
+# install.sh fetches the matching pre-built musl/gnu binary into ~/.local/bin
+# (already on PATH via base). Kept out of the generic base image, which is also
+# used standalone for non-AI dev work.
+RUN RTK_VERSION=v${RTK_VERSION} \
+    curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh \
+    && rtk --version
