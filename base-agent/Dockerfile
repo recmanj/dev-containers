@@ -2,7 +2,7 @@ FROM ghcr.io/recmanj/dev-containers/base:latest
 
 ARG USER=dev
 ARG PLAYWRIGHT_MCP_VERSION=0.0.76
-ARG RTK_VERSION=0.42.4
+ARG RTK_VERSION=v0.42.4
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/home/${USER}/.cache/ms-playwright
 
@@ -27,6 +27,6 @@ RUN playwright-mcp --version
 # install.sh fetches the matching pre-built musl/gnu binary into ~/.local/bin
 # (already on PATH via base). Kept out of the generic base image, which is also
 # used standalone for non-AI dev work.
-RUN RTK_VERSION=v${RTK_VERSION} \
+RUN RTK_VERSION=${RTK_VERSION} \
     curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh \
     && rtk --version
