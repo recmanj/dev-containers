@@ -1,8 +1,8 @@
 FROM ghcr.io/recmanj/dev-containers/base:latest
 
 ARG USER=dev
-ARG PLAYWRIGHT_MCP_VERSION=0.0.76
-ARG RTK_VERSION=v0.42.4
+ARG PLAYWRIGHT_MCP_VERSION=0.0.77
+ARG RTK_VERSION=v0.43.0
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/home/${USER}/.cache/ms-playwright
 

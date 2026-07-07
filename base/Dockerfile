@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.11.24 AS uv
+FROM ghcr.io/astral-sh/uv:0.11.27 AS uv
 FROM bitnami/kubectl:latest AS kubectl
 FROM alpine/helm:4.2.2 AS helm
 FROM debian:trixie
@@ -47,7 +47,7 @@ RUN KUSTOMIZE_VERSION=v5.8.1 \
     | tar -C /usr/local/bin -xz kustomize
 
 # Install pixi
-RUN PIXI_VERSION=0.70.2 \
+RUN PIXI_VERSION=0.72.0 \
     && case "${TARGETARCH}" in \
         amd64) PIXI_ARCH=x86_64 ;; \
         arm64) PIXI_ARCH=aarch64 ;; \
