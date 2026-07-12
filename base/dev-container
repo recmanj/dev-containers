@@ -16,7 +16,7 @@ done
 [[ "${1:-}" == "--" ]] && shift
 
 exec podman run -it --rm \
-  --userns=keep-id \
+  --userns=keep-id:uid=1000,gid=1000 \
   --security-opt no-new-privileges \
   --cap-drop all \
   --env-file "$LOCAL_CONFIG_PATH/.env" \

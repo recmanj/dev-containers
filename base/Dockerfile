@@ -62,7 +62,8 @@ RUN chmod +x /var/tmp/install-opentofu.sh \
     && /var/tmp/install-opentofu.sh --install-method deb \
     && rm -f /var/tmp/install-opentofu.sh
 
-RUN useradd -ms /bin/bash ${USER}
+RUN groupadd --gid 1000 ${USER} \
+    && useradd --uid 1000 --gid ${USER} -ms /bin/bash ${USER}
 USER ${USER}
 
 ENV PATH="/home/${USER}/.local/bin:${PATH}"
