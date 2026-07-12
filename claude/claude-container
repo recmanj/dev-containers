@@ -14,6 +14,7 @@ exec podman run -it --rm \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
   -v ~/.claude.json:$CONTAINER_HOME/.claude.json \
   -v ~/.claude:$CONTAINER_HOME/.claude \
+  -v ~/.codex:$CONTAINER_HOME/.codex \
   -v "$HOST_PATH":"$HOST_PATH" \
   -v "$VOLUME_NAME-venv":"$HOST_PATH/.venv" \
   -v "$VOLUME_NAME-node_modules":"$HOST_PATH/node_modules" \
