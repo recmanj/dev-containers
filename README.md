@@ -23,6 +23,15 @@ ships a `<name>-container` wrapper script that runs the image with rootless
 podman (`--userns=keep-id`, `--security-opt no-new-privileges`, `--cap-drop
 all`).
 
+## Codex sandbox
+
+The `claude` and `codex` images ship bubblewrap so Codex can run its own
+command sandbox. Their wrapper scripts add `--security-opt 'unmask=/proc/*'`:
+podman normally masks paths under `/proc` (`/proc/kcore`, `/proc/sys`, ...),
+which makes the kernel refuse a fresh `proc` mount in a nested PID namespace
+(`bwrap: Can't mount proc on /proc: Operation not permitted`). Unmasking only
+`/proc` keeps the other hardening in place.
+
 ## Browser use
 
 Chromium runs with `--no-sandbox` inside the container: its own sandbox cannot
