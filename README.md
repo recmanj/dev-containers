@@ -1,5 +1,14 @@
 # dev-containers
 
+## Incus VMs for Docker Compose projects
+
+For agents that need a full Docker Compose development environment, use the
+[Incus VM workflow](incus/README.md). It builds a preconfigured Debian VM image
+and creates persistent, resource-limited project VMs. Agents run directly in the
+guest; Docker runs project services. Existing rootless Podman wrappers below
+remain available as the lightweight alternative. Host credentials are never
+shared with a VM automatically; copy an explicit allowlist with `agent-vm seed`.
+
 Podman container images for AI coding agents, published to
 `ghcr.io/recmanj/dev-containers/<name>`.
 

@@ -1,0 +1,21 @@
+name: Test Incus CLI
+on:
+  push:
+    branches: [main]
+    paths: ['incus/**', '.github/workflows/test-incus.yaml']
+  pull_request:
+    paths: ['incus/**', '.github/workflows/test-incus.yaml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Validate shell syntax
+        run: bash -n incus/agent-vm incus/provision.sh
+      - name: Shellcheck
+        run: shellcheck --version && shellcheck incus/agent-vm incus/provision.sh
+      - name: Test mocked Incus contracts (no daemon required)
+        run: python3 -B -m unittest discover -s incus/tests -v

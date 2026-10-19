@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+IMAGE=${AGENT_VM_IMAGE:-agent-dev}
+CPU=${AGENT_VM_CPU:-4}
+MEMORY=${AGENT_VM_MEMORY:-8GiB}
+DISK=${AGENT_VM_DISK:-60GiB}
+BUILD_DISK=${AGENT_VM_BUILD_DISK:-20GiB}
+WAIT=${AGENT_VM_WAIT:-180}
+MARKER=dev-containers-v1
+usage() {
+  cat <<'EOF'
+Usage: agent-vm COMMAND NAME [ARGUMENT]
+  build NAME                 Build a fresh image-builder VM, publish AGENT_VM_IMAGE
+  create NAME [PUBLIC_KEY]   Create a project VM; optionally install an SSH public key
+  start NAME                 Start VM and wait for guest readiness (no-op if running)
+  enter NAME                 Interactive shell as dev in ~/workspace (no SSH needed)
+  seed NAME                  Copy allowlisted host credentials/config into a running VM
+  ip NAME                    Print the VM's IPv4 address (reachable from this host)
+  stop NAME                  Gracefully stop VM (no-op if stopped)
+  delete NAME --yes          Permanently delete a managed project VM
+  reset NAME --yes           Restore the initial baseline (ALL later data and seeded
+                             credentials are lost); restarts only if it was running
+  ssh-config NAME            Print SSH configuration using Incus as the transport
+
+Environment: AGENT_VM_IMAGE=agent-dev AGENT_VM_CPU=4 AGENT_VM_MEMORY=8GiB
+             AGENT_VM_DISK=60GiB AGENT_VM_BUILD_DISK=20GiB
+             AGENT_VM_WAIT=180 (readiness seconds)
+Incus must already be initialized with a default storage/network profile.
+EOF
+}
+die() { echo "error: $*" >&2; exit 1; }
+msg() { printf '==> %s\n' "$*" >&2; }
+[[ $# -gt 0 ]] || { usage; exit 1; }
+case $1 in -h|--help|help) usage; exit 0;; esac
+[[ $# -ge 2 ]] || die 'a VM name is required'
+cmd=$1 name=$2; shift 2
+[[ $name =~ ^[a-zA-Z][a-zA-Z0-9-]{0,62}$ ]] || die 'invalid VM name (letters, digits, hyphens only)'
+[[ $IMAGE =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]] || die 'image must be a local alias (letters, digits, hyphens)'
+[[ $CPU =~ ^[1-9][0-9]*$ ]] || die 'CPU must be a positive integer'
+[[ $WAIT =~ ^[1-9][0-9]*$ ]] || die 'WAIT must be positive seconds'
+[[ $MEMORY =~ ^[1-9][0-9]*(MiB|GiB)$ && $DISK =~ ^[1-9][0-9]*GiB$ && $BUILD_DISK =~ ^[1-9][0-9]*GiB$ ]] ||
+  die 'invalid memory or disk size'
+command -v incus >/dev/null || die 'install and initialize Incus first'
+command -v timeout >/dev/null || die 'GNU timeout is required'
+managed() {
+  local marker role
+  marker=$(incus config get "$name" user.dev-containers) || die "cannot query $name (does it exist?)"
+  [[ $marker == "$MARKER" ]] || die 'refusing unmanaged instance'
+  role=$(incus config get "$name" user.dev-containers.role) || die "cannot query $name (does it exist?)"
+  [[ $role == project ]] || die 'not a project VM'
+}
+vm_state() {
+  local s
+  s=$(incus list "^${name}\$" --format csv -c s) || die "cannot query state of $name"
+  [[ $s =~ ^[A-Z]+$ ]] || die "cannot determine state of $name"
+  printf '%s\n' "$s"
+}
+require_running() { [[ $state == RUNNING ]] || die "$name is ${state,,}; run: agent-vm start $name"; }
+ready() {
+  local deadline=$((SECONDS + WAIT)) waited=
+  local probe=(true)
+  # is-active with multiple units succeeds if ANY unit is active.
+  if [[ ${1:-} == services ]]; then
+    probe=(sh -c 'systemctl is-active --quiet docker && systemctl is-active --quiet ssh')
+  fi
+  until timeout 5 incus exec "$name" --mode non-interactive -- "${probe[@]}" </dev/null >/dev/null 2>&1; do
+    (( SECONDS < deadline )) || die "guest readiness timed out; inspect: incus console $name --show-log"
+    if [[ -z $waited ]]; then msg "Waiting up to ${WAIT}s for $name${1:+ (docker, ssh)}..."; waited=1; fi
+    sleep 2
+  done
+}
+launch() {
+  msg "Launching $name from $1 (cpu=$CPU, memory=$MEMORY, disk=$3)"
+  incus launch "$1" "$name" --vm -c limits.cpu="$CPU" -c limits.memory="$MEMORY" \
+    -c user.dev-containers="$MARKER" -c user.dev-containers.role="$2" -d root,size="$3"
+  ready
+}
+# Copy one host file ($HOME/REL) to /home/dev/DEST; missing files are skipped.
+seed_one() {
+  local src=$HOME/$1 dest=${2:-$1}
+  if [[ ! -f $src ]]; then echo "skipped (not found): $src" >&2; return 0; fi
+  src=$(readlink -f -- "$src")
+  incus file push "$src" "$name/home/dev/$dest" --uid 1000 --gid 1000 --mode 0600
+  echo "seeded $HOME/$1 -> /home/dev/$dest" >&2
+}
+seed_all() {
+  # Pre-create parents with dev ownership; file push -p would not.
+  incus exec "$name" --mode non-interactive -- install -d -m 0700 -o dev -g dev /home/dev/.claude \
+    /home/dev/.codex /home/dev/.gemini /home/dev/.config /home/dev/.config/dev-containers /home/dev/.ssh </dev/null
+  local f rel
+  for rel in .claude/.credentials.json .claude/settings.json .claude.json .codex/auth.json \
+    .codex/config.toml .gemini/oauth_creds.json .gemini/settings.json .gitconfig .config/dev-containers/.env; do
+    seed_one "$rel"
+  done
+  seed_one .config/dev-containers/github .ssh/github
+  for f in "$HOME"/.claude/*.md; do
+    [[ -f $f ]] || continue
+    seed_one ".claude/${f##*/}"
+  done
+}
+case $cmd in
+  build)
+    [[ $# == 0 ]] || die 'build takes no extra arguments'
+    # A failed connectivity check must not be mistaken for an absent alias.
+    aliases=$(incus image alias list --format csv | cut -d, -f1)
+    if grep -Fxq "$IMAGE" <<<"$aliases"; then die "image alias $IMAGE already exists; choose a new AGENT_VM_IMAGE"; fi
+    launch images:debian/13 builder "$BUILD_DISK"
+    echo "Build failures leave $name intact for inspection." >&2
+    incus file push "$HERE/provision.sh" "$name/root/provision.sh"
+    msg "Provisioning $name (typically 15-40 min; output follows)"
+    incus exec "$name" --mode non-interactive -- env DEV_CONTAINERS_PROVISION=1 CI=1 bash /root/provision.sh </dev/null
+    msg "Stopping builder"
+    incus stop "$name"
+    msg "Publishing $IMAGE (several minutes)"
+    incus publish "$name" --alias "$IMAGE"
+    echo "Published $IMAGE. Stopped builder retained: $name (delete manually when satisfied)."
+    ;;
+  create)
+    [[ $# -le 1 ]] || die 'create accepts only an optional public key file'
+    if [[ $# == 1 ]]; then
+      [[ -f $1 ]] || die 'public key file not found'
+      ssh-keygen -lf "$1" >/dev/null || die 'invalid SSH public key'
+      # Never accept a private key even if ssh-keygen can inspect it.
+      key_type=$(awk 'NR == 1 { print $1; exit }' "$1")
+      case $key_type in
+        ssh-*|ecdsa-*|sk-ssh-ed25519@openssh.com|sk-ecdsa-sha2-nistp256@openssh.com) ;;
+        *) die 'expected an OpenSSH public key';;
+      esac
+    fi
+    launch "$IMAGE" project "$DISK"
+    incus exec "$name" --mode non-interactive -- test -f /etc/dev-containers-image </dev/null
+    ready services
+    if [[ $# == 1 ]]; then
+      msg "Installing SSH public key"
+      incus exec "$name" --mode non-interactive -- install -d -m 700 -o dev -g dev /home/dev/.ssh </dev/null
+      incus file push "$1" "$name/home/dev/.ssh/authorized_keys" --uid 1000 --gid 1000 --mode 0600
+    fi
+    # A stopped baseline gives consistent filesystem and database state.
+    msg "Creating stopped baseline snapshot (VM restarts)"
+    incus stop "$name"
+    incus snapshot create "$name" baseline --no-expiry
+    incus start "$name"
+    ready services
+    echo "Ready: $0 enter $name   (optional credentials: $0 seed $name)"
+    ;;
+  start|enter|stop|delete|reset|ssh-config|seed|ip)
+    case $cmd in
+      delete|reset) [[ $# == 1 && $1 == --yes ]] || die "$cmd destroys project data; pass --yes to confirm";;
+      *) [[ $# == 0 ]] || die 'unexpected arguments';;
+    esac
+    managed
+    case $cmd in start|stop|enter|reset|seed|ip) state=$(vm_state);; esac
+    case $cmd in
+      start)
+        if [[ $state == RUNNING ]]; then echo "$name is already running"; else incus start "$name"; fi
+        ready services;;
+      enter)
+        require_running; ready
+        # setpriv keeps a controlling tty (su -c does not) and the docker group.
+        exec incus exec "$name" --cwd /home/dev/workspace -- \
+          setpriv --reuid=1000 --regid=1000 --init-groups --reset-env bash --login;;
+      stop)
+        if [[ $state == STOPPED ]]; then echo "$name is already stopped"; else incus stop "$name"; fi;;
+      delete) incus delete "$name" --force;;
+      reset)
+        # Validate baseline before stopping anything; preserve the prior run state.
+        # Name is the first CSV column; -c is unavailable on older 6.0 clients.
+        snapshots=$(incus snapshot list "$name" --format csv | cut -d, -f1)
+        grep -Fxq baseline <<<"$snapshots" || die 'baseline snapshot missing'
+        # Bounded: a hung or uncooperative guest must not block recovery.
+        if [[ $state != STOPPED ]]; then incus stop "$name" --timeout 60 || incus stop "$name" --force; fi
+        msg "Restoring baseline"
+        incus snapshot restore "$name" baseline
+        echo "Any seeded credentials were removed; re-run: agent-vm seed $name" >&2
+        if [[ $state == RUNNING ]]; then
+          incus start "$name"; ready services
+        else
+          echo "Restored; $name left stopped."
+        fi;;
+      seed) require_running; ready; seed_all;;
+      ip)
+        require_running; ready
+        route=$(incus exec "$name" --mode non-interactive -- ip -4 -o route get 1.1.1.1 </dev/null) ||
+          die "cannot determine address of $name"
+        addr=$(awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}' <<<"$route")
+        [[ $addr =~ ^[0-9]+(\.[0-9]+){3}$ ]] || die "no IPv4 address for $name yet (DHCP not finished?)"
+        printf '%s\n' "$addr";;
+      ssh-config)
+        cat <<EOF
+Host $name
+    HostName $name
+    User dev
+    ProxyCommand incus exec $name -- nc 127.0.0.1 22
+    ForwardAgent no
+    StrictHostKeyChecking ask
+EOF
+        ;;
+    esac
+    ;;
+  *) die "unknown command: $cmd";;
+esac
