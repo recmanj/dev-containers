@@ -12,6 +12,7 @@ exec podman run -it --rm \
   --security-opt no-new-privileges \
   --cap-drop all \
   --env-file "$LOCAL_CONFIG_PATH/.env" \
+  -e LLAMA_BASE_URL="${PI_LLAMA_BASE_URL:-http://host.containers.internal:9931}" \
   -v ~/.pi/agent:$CONTAINER_HOME/.pi/agent \
   -v ~/.local/share/opencode:$CONTAINER_HOME/.local/share/opencode \
   -v "$HOST_PATH":"$HOST_PATH" \
