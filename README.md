@@ -131,3 +131,192 @@ rtk init -g --agent pi
 Verify the hook is active with `rtk init --show` (where supported) or run
 `rtk gain` after a session to see token savings. Disable rtk for a single
 command with `RTK_DISABLED=1 <cmd>`.
+
+## Extra mounts (`DEV_CONTAINER_EXTRA_VOLUMES`)
+
+The `claude`, `codex`, `gemini` and `opencode` wrappers and `base/dev-container`
+read `DEV_CONTAINER_EXTRA_VOLUMES`: one `podman -v` spec per line (blank lines
+are ignored), added right after the `node_modules` mount. Unset, the wrappers
+behave exactly as before. `agent-squad` uses it to expose a worktree's git
+dir; `pi/pi-container` will get the same block in a follow-up.
+
+```sh
+DEV_CONTAINER_EXTRA_VOLUMES=$'/data:/data:ro\n/cache:/cache' claude-container
+```
+
+## Parallel agents (`agent-squad`)
+
+`squad/agent-squad` runs several wrapped agents side by side, each in its own
+git worktree and tmux session. It is one bash script built on `git worktree`
+and tmux only, written to be audited.
+
+| per task `NAME` | |
+|---|---|
+| worktree | `<repo>/.claude/worktrees/squad-NAME` |
+| branch | `squad/NAME` |
+| tmux session | `squad-<repo>-NAME` (your default tmux server) |
+| podman volumes | the wrappers' usual `dev-container-<hash of worktree path>[-venv,-node_modules]` |
+
+**Requirements:** Linux, git 2.36 or later (2.45+ for `GIT_NO_LAZY_FETCH` to
+matter), tmux 3.3 or later (multi-argument `new-session` commands; to be
+confirmed by the tier-2 tests), and wrappers that carry the
+`DEV_CONTAINER_EXTRA_VOLUMES` block.
+
+**Install:** symlink `squad/agent-squad` from your **main checkout** into
+`~/.local/bin`. It resolves its own symlink and runs
+`<agent>/<agent>-container` (`base/dev-container` for `-a dev`) from that same
+checkout; a wrapper on `PATH` is used only if the repo copy is missing, and
+`-a /path/to/wrapper` picks one explicitly. Never run `agent-squad` or a
+wrapper from inside a squad worktree (its content is agent-written); both are
+refused.
+
+```sh
+agent-squad new fix-login                 # worktree + branch off the current branch, starts claude
+agent-squad new api -a codex -b main      # another agent, explicit base
+agent-squad new docs -a dev -- -p 8080    # args after -- go to the wrapper
+agent-squad ls                            # name, running/exited N/stopped, branch, commits ahead, path
+agent-squad attach fix-login              # detach again with the tmux prefix + d
+agent-squad status fix-login              # git status + commits since base
+agent-squad diff fix-login [--stat]       # committed work only (what merge takes); warns about uncommitted files
+agent-squad stop fix-login                # kill the session, wait for the container to go
+agent-squad merge fix-login               # --no-ff merge into the main checkout's branch (agent must be stopped)
+agent-squad start fix-login               # relaunch (also after the agent exited)
+agent-squad rm fix-login [--force] [--delete-branch] [--keep-volumes]
+agent-squad mounts fix-login              # the -v specs passed to the wrapper
+```
+
+- `-a AGENT` defaults to `$AGENT_SQUAD_AGENT` or `claude`. `start` does not
+  remember the agent used by `new`; pass `-a` again.
+- `new` from a non-squad worktree (e.g. `.claude/worktrees/feature`) is
+  supported; the base defaults to that worktree's branch. On a detached HEAD
+  the base is the HEAD commit, with no upstream.
+- `merge` refuses while the task's session or container is running: the agent
+  can move its branch at any time, so stop it first. It resolves the branch to
+  one commit, checks and merges exactly that commit, and prints its ID. Review
+  with `diff` after `stop` so what you review is what gets merged.
+- `merge` merges into the branch checked out where you run it. From anywhere
+  but the main checkout it requires `--into BRANCH`, naming the branch checked
+  out there, so a task branch never lands on `main` by accident. It refuses a
+  detached HEAD (jj leaves one in colocated repos) and prints the jj commands
+  instead. It lists changed paths that can run code (`.claude/`, `.husky/`,
+  `.envrc`, `Makefile`, `package.json`, ...) and asks before merging when
+  stdin is a terminal; it warns when the target checkout has uncommitted
+  changes (git refuses only if the merge touches them).
+- `rm` refuses a running session (use `--force`), a dirty worktree (use
+  `--force`) and containers still using the worktree. `--force` waits up to
+  `$AGENT_SQUAD_STOP_TIMEOUT` (30) seconds for containers to go and aborts
+  without touching anything if they don't. It removes the worktree even if the
+  agent locked it, keeps the branch unless `--delete-branch`, and removes the
+  three volumes unless `--keep-volumes`.
+- `new` adds `/.claude/worktrees/` to `.git/info/exclude` if it is not ignored yet.
+
+**TTY:** the wrappers need a terminal. claude, opencode and dev always pass
+`-it`; codex and gemini add `-t` only when stdin and stdout are both terminals.
+A tmux pane provides both. The session gets `remain-on-exit`, so an agent's
+last output stays visible; `ls` shows `exited N`.
+
+### Git inside a squad container
+
+The worktree's `.git` file points at `<main>/.git/worktrees/squad-NAME`, which
+the plain wrappers do not mount. `agent-squad` passes this allowlist (parent
+before child):
+
+| path | mode | why |
+|---|---|---|
+| `<main>/.git` (C) | ro | config, hooks, info, main `HEAD`/`index`, other worktrees' admin dirs |
+| `C/objects`, `C/refs`, `C/logs` (+ `C/reftable`, `C/lfs` if present) | rw | commits, branches, reflogs |
+| `C/worktrees/squad-NAME` (A) | rw | this worktree's `HEAD`, `index`, `FETCH_HEAD`, `MERGE_HEAD`, `ORIG_HEAD`, `COMMIT_EDITMSG`, `logs/HEAD`, rebase state |
+| `A/commondir`, `A/gitdir`, `A/config.worktree`, `<worktree>/.git` | ro | the agent cannot repoint its own git dir |
+
+Per-worktree files live in A, which is why commit, fetch, merge and rebase
+work although C is read-only.
+
+- **Works:** `status`, `add`, `commit`, `branch`/`checkout -b`, `tag`,
+  `stash`, `merge`, `rebase`, `reset`, `fetch`. Hooks in `C/hooks` still run
+  inside the container.
+- **Noise:** with git 2.45+ (the images ship 2.47) commit, `checkout -b`,
+  `reset --hard` and stash print
+  `error: Unable to create '<main>/.git/packed-refs.lock': Read-only file system`.
+  Deleting pseudorefs (`ORIG_HEAD`, `MERGE_HEAD`, ...) takes the packed-refs
+  lock in the read-only C. The commands still succeed (exit 0); agents will
+  see `error:` lines on every commit and can ignore them.
+- **Fails:** deleting branches or tags and `fetch --prune` (need
+  `packed-refs.lock`); `gc`/auto-maintenance (harmless); any config write
+  (`push -u`, `branch --set-upstream-to`, `remote add`, `git config --local`);
+  `git worktree *` (Claude Code's own worktree feature included);
+  `sparse-checkout` with `extensions.worktreeConfig`; deepening a shallow
+  clone; LFS when `.git/lfs` does not exist yet; Claude Code appending to
+  `.git/info/exclude`.
+- **Shared:** `refs/stash` is a common ref, so all squad agents and the main
+  checkout share one stash stack; one agent's `stash pop` can pop another's
+  entry.
+- **Fresh per worktree:** volume names hash the worktree path, so each task
+  gets new, empty `.venv` and `node_modules` volumes (run `uv sync` / `npm ci`
+  per task) and its own `~/.claude/projects/<path>` history. With `-a dev`,
+  `base/dev-container` mounts the volume as the whole container home, so each
+  task also gets a fresh home (shell history, caches, tool logins). `rm`
+  removes these volumes unless `--keep-volumes`. `dev -p` ports clash between
+  tasks.
+- **Empty dirs:** the first run creates empty `.venv/` and `node_modules/`
+  mount points in the worktree; they don't show in `git status` and `rm`
+  deletes them. A *non-empty* host-side `.venv` in a worktree was written
+  outside the container.
+
+### Security model and remaining risks
+
+- **A squad container cannot touch** `C/config`, `C/hooks`, `C/info`,
+  `C/config.worktree`, the main checkout's `index`, `HEAD`, `rebase-merge` and
+  `sequencer`, other worktrees' admin dirs, its own `commondir`, `gitdir` and
+  `.git` pointer, or other tasks' checkouts, and cannot create `C/commondir`.
+  Mount points cannot be renamed over or unlinked (EBUSY) and, with
+  `--cap-drop all`, not unmounted; hardlinking `C/config` into `C/objects` or
+  `A/commondir` into A fails (EXDEV, separate bind mounts).
+- **Still writable (by design):** all refs, so an agent can move `main`,
+  other tasks' branches and `refs/remotes`, or turn `refs/heads/main` into a
+  symref (host `git status` then reports another branch); and the whole object
+  store, so it can delete objects, add a pack that shadows objects, or write
+  `objects/info/alternates` so host git reads objects from a path it chose.
+  `git fsck --full` detects tampering; keep a remote and push often.
+- **jj (colocated repos):** jj's automatic import abandons commits no longer
+  reachable from a git ref, so an agent that moves `main` can make your next
+  `jj` command drop commits (`jj op log` / `jj op restore` recovers them). jj
+  runs no git hooks and ignores `core.fsmonitor`.
+- **Host-side git:** every git call in `agent-squad` goes through `g()`:
+  `-c` overrides that disable hooks, fsmonitor, pagers, editors, signing and
+  signature verification (every `gpg.*program` points at `/bin/false`, since a
+  repo-config `gpg.program` with `merge.verifySignatures` would otherwise run
+  on merge), transports, submodule recursion and auto-gc;
+  `GIT_NO_REPLACE_OBJECTS`, `GIT_OPTIONAL_LOCKS=0` (host `status` never
+  rewrites the agent's index) and `--no-ext-diff --no-textconv` on diffs.
+  Repo-config keys that no flag can disable (`filter.*.clean/smudge/process`,
+  `merge.*.driver`, `include.path`, `includeIf.*.path`) make `new`, `status`,
+  `diff`, `merge` and `rm` refuse unless `AGENT_SQUAD_TRUST_CONFIG=1`; a
+  non-empty `refs/replace/` is reported. `alias.*` is not checked: git ignores
+  aliases that shadow builtins. Global and system config are trusted (no
+  wrapper mounts them), so filters from your global config (git-lfs) still run
+  on attributes an agent writes.
+- **Non-squad sessions are unchanged:** a wrapper run in the main checkout can
+  write `.git/config` and hooks, which run the next time you use git there
+  (agents have been seen writing files into `.git/`). The hardening above only
+  covers `agent-squad`'s own git calls, not your shell prompt or IDE.
+- **Agent config dirs are unchanged:** e.g. the claude wrapper mounts
+  `~/.claude` read-write in every session; an agent can edit
+  `~/.claude/settings.json` hooks, which is host code.
+- **Merged code is code:** review `.claude/settings.json`, `.husky`, `.envrc`,
+  `package.json` scripts and Makefiles before `merge`.
+- **tmux** uses a user-only unix socket; any process running as you can attach.
+
+### Tests
+
+```sh
+bash squad/tests/run.sh
+```
+
+Tier 1 needs bash and git (bwrap, when it works, simulates the container's
+mounts); tier 2 needs tmux. The tests put a fake `podman` first on `PATH` and
+abort if the real one would be reached. Once on the host, also run the manual
+smoke test: `agent-squad new smoke`, then inside check that `git commit`
+works, `touch <main>/.git/config` fails and `.git/objects` is writable; check
+that `stop` returns without a warning and `podman ps -a --filter
+volume=dev-container-<hash>-venv` is empty; `rm smoke`; then
+`agent-squad new smoke2 -a dev`.

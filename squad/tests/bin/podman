@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Fake podman for squad tests. Logs argv (one argument per line, then a
+# blank line) to $FAKE_PODMAN_LOG and never starts anything.
+#   ps:  if $FAKE_PS_FAIL is set, fail; else if the file $FAKE_PS_BUSY holds
+#        N > 0, print "deadbeef" and decrement N; otherwise print nothing.
+#   volume exists: always true.  volume rm / run / anything else: exit 0.
+set -euo pipefail
+if [ -n "${FAKE_PODMAN_LOG:-}" ]; then printf '%s\n' "$@" "" >> "$FAKE_PODMAN_LOG"; fi
+case ${1:-} in
+  ps)
+    if [ -n "${FAKE_PS_FAIL:-}" ]; then echo "Error: cannot connect to podman socket" >&2; exit 125; fi
+    if [ -n "${FAKE_PS_BUSY:-}" ] && [ -f "$FAKE_PS_BUSY" ]; then
+      n=$(cat "$FAKE_PS_BUSY")
+      if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$FAKE_PS_BUSY"; echo deadbeef; fi
+    fi ;;
+  volume) [ "${2:-}" != rm ] || printf '%s\n' "${@:3}" ;;
+esac
+exit 0
