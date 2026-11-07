@@ -23,6 +23,34 @@ ships a `<name>-container` wrapper script that runs the image with rootless
 podman (`--userns=keep-id`, `--security-opt no-new-privileges`, `--cap-drop
 all`).
 
+## Distrobox images
+
+Separate Fedora-based images for [distrobox](https://distrobox.it/), with all
+tooling baked in so boxes don't install anything on first enter. Published to
+`ghcr.io/recmanj/dev-containers/distrobox/<name>`.
+
+```
+fedora-toolbox:45 ── distrobox/base ── oxidian
+                                    ── ecmwf
+                                    ── eodh
+```
+
+`distrobox/base` holds the tools shared by every box (git, jq, make, vim, yq).
+The Fedora image is pinned by version and digest; Dependabot bumps it, and the
+nightly build picks up dnf package updates. Versions downloaded outside dnf
+(e.g. `SOPS_VERSION` in `distrobox/oxidian`) are bumped by hand.
+
+Use them from a `distrobox.ini`:
+
+```ini
+[eodh]
+image=ghcr.io/recmanj/dev-containers/distrobox/eodh:latest
+```
+
+The repo is private, so log in once with `podman login ghcr.io` (a token with
+`read:packages`). After an image update, recreate the boxes with
+`distrobox assemble create --replace`.
+
 ## Codex sandbox
 
 The `claude` and `codex` images ship bubblewrap so Codex can run its own
