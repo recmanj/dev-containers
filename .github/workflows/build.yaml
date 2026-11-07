@@ -64,3 +64,30 @@ jobs:
     with:
       context: pi
       no-cache: ${{ inputs.no-cache == true }}
+
+  build-distrobox-base:
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: distrobox/base
+      no-cache: ${{ inputs.no-cache == true }}
+
+  build-distrobox-oxidian:
+    needs: build-distrobox-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: distrobox/oxidian
+      no-cache: ${{ inputs.no-cache == true }}
+
+  build-distrobox-ecmwf:
+    needs: build-distrobox-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: distrobox/ecmwf
+      no-cache: ${{ inputs.no-cache == true }}
+
+  build-distrobox-eodh:
+    needs: build-distrobox-base
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: distrobox/eodh
+      no-cache: ${{ inputs.no-cache == true }}
