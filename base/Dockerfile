@@ -1,6 +1,6 @@
-FROM ghcr.io/astral-sh/uv:0.12.15 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
 FROM bitnami/kubectl:latest AS kubectl
-FROM alpine/helm:4.3.0 AS helm
+FROM alpine/helm:4.3.1 AS helm
 FROM debian:trixie
 
 LABEL devcontainer.metadata='[]'
@@ -35,19 +35,19 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 
 # Install GH CLI
 ARG TARGETARCH
-RUN GH_VERSION=2.101.0 \
+RUN GH_VERSION=2.103.3 \
     && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
     | tar -C /usr/local -xz --strip-components=1 --wildcards '*/bin/*' '*/share/*'
 
 # Install Kubernetes tools
 COPY --from=kubectl /opt/bitnami/kubectl/bin/kubectl /usr/local/bin/kubectl
 COPY --from=helm /usr/bin/helm /usr/local/bin/helm
-RUN KUSTOMIZE_VERSION=v5.8.1 \
+RUN KUSTOMIZE_VERSION=v5.8.3 \
     && curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_${TARGETARCH}.tar.gz" \
     | tar -C /usr/local/bin -xz kustomize
 
 # Install pixi
-RUN PIXI_VERSION=0.81.0 \
+RUN PIXI_VERSION=0.84.1 \
     && case "${TARGETARCH}" in \
         amd64) PIXI_ARCH=x86_64 ;; \
         arm64) PIXI_ARCH=aarch64 ;; \
