@@ -1,126 +1,95 @@
 # dev-containers
 
-Podman container images for AI coding agents, published to
-`ghcr.io/recmanj/dev-containers/<name>`.
-
-Image hierarchy:
+Podman images for running AI coding agents (Claude Code, Codex, Gemini CLI,
+opencode, pi) in rootless containers, plus a few Fedora images for
+[distrobox](https://distrobox.it/). Images are rebuilt nightly and published
+to `ghcr.io/recmanj/dev-containers/<name>`.
 
 ```
 base ── base-agent ── claude ── t3
-                   ── gemini
-                   ── codex
-                   ── opencode
-                   ── pi
+                   ├─ codex
+                   ├─ gemini
+                   ├─ opencode
+                   └─ pi
+
+fedora-toolbox ── distrobox/base ── oxidian
+                                 ├─ ecmwf
+                                 └─ eodh
 ```
 
-`base` holds the common dev toolchain (Node via fnm, uv, pixi, k8s tools, …)
-and is also usable standalone for non-AI dev work. `base-agent` builds on
-`base` and adds Playwright Chromium, the [Playwright MCP
-server](https://github.com/microsoft/playwright-mcp) (`playwright-mcp`,
-pre-installed globally), and the [rtk](https://github.com/rtk-ai/rtk)
-token-saving CLI proxy — all inherited by every agent image. Each agent directory
-ships a `<name>-container` wrapper script that runs the image with rootless
-podman (`--userns=keep-id`, `--security-opt no-new-privileges`, `--cap-drop
-all`).
+- `base`: Debian with the general dev toolchain (Node via fnm, uv, pixi, gh,
+  kubectl, helm, OpenTofu, Ansible, …). Also usable on its own.
+- `base-agent`: adds Chromium with the
+  [Playwright MCP server](https://github.com/microsoft/playwright-mcp) and
+  [rtk](https://github.com/rtk-ai/rtk).
+- One image per agent, plus `t3`, which runs the
+  [t3code](https://github.com/pingdotgg/t3code) server.
 
-## Building locally
+## Usage
 
-Run the build script with Podman installed:
+Each agent directory has a `<name>-container` wrapper. Put it on your `PATH`
+and run it from a project directory:
 
 ```sh
-./build.sh t3                    # build base → base-agent → claude → t3
-./build.sh codex gemini          # build shared parents once, then both agents
-./build.sh distrobox/eodh        # build distrobox/base, then distrobox/eodh
-./build.sh                      # build every image
-./build.sh --no-cache codex      # rebuild codex and its parents without cache
-./build.sh --dry-run t3          # preview the commands
+cd ~/Code/my-project
+claude-container
 ```
 
-Builds use `linux/amd64`, matching CI, and stay in local Podman storage;
-nothing is pushed and GHCR login is not needed for the locally built parents.
-External base images and tool downloads still need network access. On other
-architectures, building requires amd64 emulation configured on the host.
+The wrapper mounts the current directory at the same path, along with the
+agent's config from your home (`~/.claude`, `~/.codex`, …). It runs with
+`--userns=keep-id`, `--cap-drop all` and `no-new-privileges`. `.venv` and
+`node_modules` are kept in per-project podman volumes. Two files in `~/.config/dev-containers/`
+must exist:
 
-By default, images are tagged `ghcr.io/recmanj/dev-containers/<name>:latest`,
-replacing that tag locally so the existing wrapper scripts and t3 Quadlet can
-use them. Recreate an existing container to use the new image
-(for t3, `systemctl --user restart t3`). To keep your local `latest` tags,
-use `./build.sh --tag local t3`; all parents use the same tag. Run that image
-explicitly or change the wrapper/Quadlet image reference to `:local`.
+- `.env`: environment passed to the container (API keys etc.)
+- `github`: an SSH key, mounted read-only
 
-The script can be invoked from any working directory and stops on the first
-failed build.
+## Agent setup
 
-## Distrobox images
+Agent configs live on the host, so each step below only needs to be done once
+per agent.
 
-Separate Fedora-based images for [distrobox](https://distrobox.it/), with all
-tooling baked in so boxes don't install anything on first enter. Published to
-`ghcr.io/recmanj/dev-containers/distrobox/<name>`.
+To give an agent a browser, register the Playwright MCP server with this
+command:
 
 ```
-fedora-toolbox:45 ── distrobox/base ── oxidian
-                                    ── ecmwf
-                                    ── eodh
+playwright-mcp --browser chromium --headless --no-sandbox --isolated
 ```
 
-`distrobox/base` holds the tools shared by every box (git, jq, make, vim, yq).
-The Fedora image is pinned by version and digest; Renovate bumps it (see
-[Version updates](#version-updates)), and the nightly build picks up dnf
-package updates.
+For Claude Code, run
+`claude mcp add playwright -- playwright-mcp --browser chromium --headless --no-sandbox --isolated`
+inside the container. For the others, add it to `~/.gemini/settings.json`,
+`~/.codex/config.toml` or `~/.config/opencode/opencode.json`.
 
-Use them from a `distrobox.ini`:
+To enable rtk, run `rtk init -g` inside the container, adding `--gemini`,
+`--codex`, `--opencode` or `--agent pi` for the other agents. Check it with
+`rtk gain` after a session; set `RTK_DISABLED=1` to skip it for one command.
 
-```ini
-[eodh]
-image=ghcr.io/recmanj/dev-containers/distrobox/eodh:latest
-```
+Notes:
 
-The repo is private, so log in once with `podman login ghcr.io` (a token with
-`read:packages`). After an image update, recreate the boxes with
-`distrobox assemble create --replace`.
-
-## Version updates
-
-[Renovate](https://docs.renovatebot.com/) keeps every pinned version current
-(`renovate.json`):
-
-- `FROM` images and GitHub Actions are picked up automatically.
-- Tools downloaded in a Dockerfile are pinned as an `ARG` with a comment that
-  tells Renovate where they are released:
-
-  ```dockerfile
-  # renovate: datasource=github-releases depName=cli/cli
-  ARG GH_VERSION=2.103.3
-  ```
-
-  Add the same comment when pinning a new tool.
-
-Releases must be at least 3 days old before Renovate proposes them. Minor,
-patch and digest updates are grouped into one `tooling` PR and merged once CI
-passes; major updates get their own PR for review. Pending updates are listed
-on the Dependency Dashboard issue.
-
-PR builds push images as `pr-<number>`, and child images build `FROM` their
-parent's `pr-<number>` tag (the `BASE_TAG` build arg), so a change to `base`
-is tested through the whole image chain before merge.
+- Chromium's own sandbox can't start under rootless podman, so it runs with
+  `--no-sandbox` and the container is the boundary. `--browser chromium` is
+  needed because the MCP server defaults to Google Chrome, which isn't
+  installed.
+- The `claude` and `codex` wrappers add `--security-opt 'unmask=/proc/*'`.
+  Without it, Codex's bubblewrap sandbox fails with
+  `bwrap: Can't mount proc on /proc`.
+- To upgrade the browser, bump `PLAYWRIGHT_MCP_VERSION` in
+  `base-agent/Dockerfile`. Chromium comes from the Playwright version bundled
+  with it.
 
 ## t3code server
 
-The `t3` image runs the [t3code](https://github.com/pingdotgg/t3code) server
-with Claude Code and Codex in one long-lived container. The desktop and mobile
-apps connect to it as a remote environment, so agents, terminals and git all
-run inside the container.
+The `t3` image runs the t3code server with Claude Code and Codex in one
+long-lived container. The desktop and mobile apps connect to it as a remote
+environment, so agents, terminals and git all run inside the container.
 
-`t3/t3.container` is a Podman Quadlet that runs it as a systemd user service.
-It publishes the server on `127.0.0.1:3773` only. Inside the container `HOME`
-is your host home path, so `~/Code` and project paths are the same as on the
-host. Only your project folders (`~/Code`, `~/Oxidian/Code`), `~/.claude` and
-`~/.codex` are mounted from your real home
-(add `Volume=` lines for other project folders); the rest of the container's
-home, including t3's data in `.t3`, lives in `~/.config/dev-containers/t3`,
-apart from the desktop app's `~/.t3`. To keep your existing projects and
-threads, copy them in before the first start, with the desktop app closed:
-`mkdir -p ~/.config/dev-containers/t3/.t3 && cp -a ~/.t3/userdata ~/.config/dev-containers/t3/.t3/`.
+`t3/t3.container` is a Podman Quadlet that runs it as a systemd user service
+on `127.0.0.1:3773`. Inside the container, `HOME` is your host home path, so
+project paths match the host. Only `~/Code`, `~/.claude` and `~/.codex` are
+mounted from your real home; add `Volume=` lines for other project folders.
+The rest of the home, including t3's data, lives in
+`~/.config/dev-containers/t3`.
 
 ```sh
 mkdir -p ~/.config/dev-containers/t3 ~/.config/containers/systemd
@@ -130,124 +99,72 @@ systemctl --user start t3
 loginctl enable-linger "$(id -un)"   # keep it running after logout
 ```
 
-Connect the apps:
+To keep existing projects and threads from the desktop app, copy them in
+before the first start, with the app closed:
 
-- **Desktop:** turn off **Settings → Environments → Local environment**
-  so nothing runs on the host, then add `http://127.0.0.1:3773` as an
-  environment with a token from `podman exec t3 t3 pair`.
-- **Phone over Tailscale:** expose the port on the host with
-  `tailscale serve --bg 3773`, then add `https://<machine>.<tailnet>.ts.net`
-  in the app with a fresh token from `podman exec t3 t3 pair`. Ignore the
-  pairing URL it prints; that is the container's own address.
+```sh
+mkdir -p ~/.config/dev-containers/t3/.t3
+cp -a ~/.t3/userdata ~/.config/dev-containers/t3/.t3/
+```
 
-Update with `podman pull ghcr.io/recmanj/dev-containers/t3:latest` and
+Connect the apps with a token from `podman exec t3 t3 pair`:
+
+- **Desktop:** turn off *Settings → Environments → Local environment*, then
+  add `http://127.0.0.1:3773`.
+- **Phone over Tailscale:** run `tailscale serve --bg 3773` on the host and
+  add `https://<machine>.<tailnet>.ts.net`. Ignore the pairing URL `t3 pair`
+  prints; that's the container's own address.
+
+To update, `podman pull ghcr.io/recmanj/dev-containers/t3:latest` and
 `systemctl --user restart t3`.
 
-## Codex sandbox
+## Distrobox images
 
-The `claude` and `codex` images ship bubblewrap so Codex can run its own
-command sandbox. Their wrapper scripts add `--security-opt 'unmask=/proc/*'`:
-podman normally masks paths under `/proc` (`/proc/kcore`, `/proc/sys`, ...),
-which makes the kernel refuse a fresh `proc` mount in a nested PID namespace
-(`bwrap: Can't mount proc on /proc: Operation not permitted`). Unmasking only
-`/proc` keeps the other hardening in place.
+Fedora images with all tooling baked in, so boxes don't install anything on
+first enter. Use them from a `distrobox.ini`:
 
-## Browser use
+```ini
+[eodh]
+image=ghcr.io/recmanj/dev-containers/distrobox/eodh:latest
+```
 
-Chromium runs with `--no-sandbox` inside the container: its own sandbox cannot
-initialize under rootless podman, and the hardened container is the sandbox
-boundary instead. `--isolated` keeps the browser profile in memory, matching
-the ephemeral `--rm` containers. `--browser chromium` is required: without it
-the MCP server defaults to the Google Chrome channel, which is not installed
-in the image (and cannot be installed at runtime by the non-root user).
+After an image update, recreate the boxes with
+`distrobox assemble create --replace`.
 
-Agent configs are mounted from the host, so registering the MCP server is a
-one-time action per agent:
-
-**Claude Code** (inside the container; persists via the mounted `~/.claude.json`):
+## Building locally
 
 ```sh
-claude mcp add playwright -- playwright-mcp --browser chromium --headless --no-sandbox --isolated
+./build.sh t3                    # base → base-agent → claude → t3
+./build.sh codex gemini          # shared parents are built once
+./build.sh                       # everything
+./build.sh --no-cache codex
+./build.sh --dry-run t3          # print the podman commands
+./build.sh --tag local t3        # tag as :local instead of :latest
 ```
 
-**Gemini CLI** (`~/.gemini/settings.json`):
+Builds target `linux/amd64` like CI and stay in local storage. By default they
+overwrite your local `:latest` tags, so the wrappers and the Quadlet pick them
+up the next time a container is created (`systemctl --user restart t3` for t3).
 
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "playwright-mcp",
-      "args": ["--browser", "chromium", "--headless", "--no-sandbox", "--isolated"]
-    }
-  }
-}
+## Version updates
+
+[Renovate](https://docs.renovatebot.com/) keeps every version pinned and
+current. `FROM` images and GitHub Actions are found automatically. Tools
+downloaded in a Dockerfile need a comment saying where they're released:
+
+```dockerfile
+# renovate: datasource=github-releases depName=cli/cli
+ARG GH_VERSION=2.103.3
 ```
 
-**Codex** (`~/.codex/config.toml`):
+Releases have to be 3 days old before Renovate picks them up. Minor, patch and
+digest updates go into one `tooling` PR that merges once CI passes; majors get
+their own PR.
 
-```toml
-[mcp_servers.playwright]
-command = "playwright-mcp"
-args = ["--browser", "chromium", "--headless", "--no-sandbox", "--isolated"]
-```
+PR builds push images tagged `pr-<number>`, and child images build on their
+parent's PR tag, so a change to `base` is tested through the whole chain
+before merge.
 
-**opencode** (`~/.config/opencode/opencode.json`):
+## License
 
-```json
-{
-  "mcp": {
-    "playwright": {
-      "type": "local",
-      "command": ["playwright-mcp", "--browser", "chromium", "--headless", "--no-sandbox", "--isolated"],
-      "enabled": true
-    }
-  }
-}
-```
-
-Upgrading the browser stack: bump `PLAYWRIGHT_MCP_VERSION` in
-`base-agent/Dockerfile` only — Chromium is downloaded via the playwright
-version bundled inside `@playwright/mcp`, so the two cannot drift.
-
-## rtk (token-saving proxy)
-
-The `rtk` binary is pre-installed in the `base-agent` image (pinned via
-`RTK_VERSION` in `base-agent/Dockerfile`).
-
-Agent configs are mounted from the host, so registering rtk's per-agent hook
-is a one-time action per agent (writes land in the host-mounted config dir and
-persist across containers):
-
-**Claude Code** (inside the container; persists via the mounted `~/.claude`):
-
-```sh
-rtk init -g
-```
-
-**Gemini CLI** (persists via the mounted `~/.gemini`):
-
-```sh
-rtk init -g --gemini
-```
-
-**Codex** (persists via the mounted `~/.codex`):
-
-```sh
-rtk init -g --codex
-```
-
-**opencode** (persists via the mounted `~/.config/opencode`):
-
-```sh
-rtk init -g --opencode
-```
-
-**pi** (persists via the mounted `~/.pi/agent`):
-
-```sh
-rtk init -g --agent pi
-```
-
-Verify the hook is active with `rtk init --show` (where supported) or run
-`rtk gain` after a session to see token savings. Disable rtk for a single
-command with `RTK_DISABLED=1 <cmd>`.
+[MIT](LICENSE)
