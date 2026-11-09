@@ -1,7 +1,10 @@
 ARG BASE_TAG=latest
 FROM ghcr.io/recmanj/dev-containers/base-agent:${BASE_TAG}
 
-ENV PATH="/home/dev/.opencode/bin:${PATH}"
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG USER=dev
+ENV PATH="/home/${USER}/.opencode/bin:${PATH}"
 
 # The opencode-ai npm package and this installer only carry OpenCode 1.
 # renovate: datasource=npm depName=opencode-ai

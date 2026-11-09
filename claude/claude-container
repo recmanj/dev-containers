@@ -6,8 +6,10 @@ CONTAINER_HOME=/home/dev
 HOST_PATH="$(pwd)"
 VOLUME_NAME="dev-container-$(printf '%s' "$HOST_PATH" | shasum -a 256 | cut -c1-12)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
+TTY_FLAGS=(-i)
+[ -t 0 ] && [ -t 1 ] && TTY_FLAGS=(-it)
 
-exec podman run -it --rm \
+exec podman run "${TTY_FLAGS[@]}" --rm \
   --userns=keep-id:uid=1000,gid=1000 \
   --security-opt no-new-privileges \
   --security-opt 'unmask=/proc/*' \

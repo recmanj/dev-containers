@@ -1,6 +1,8 @@
 ARG BASE_TAG=latest
 FROM ghcr.io/recmanj/dev-containers/base:${BASE_TAG}
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG USER=dev
 # renovate: datasource=npm depName=@playwright/mcp
 ARG PLAYWRIGHT_MCP_VERSION=0.0.84
@@ -25,11 +27,8 @@ USER ${USER}
 
 RUN playwright-mcp --version
 
-# Install rtk (Rust Token Killer) — token-saving CLI proxy shared by all agent
-# images that inherit base-agent. Pinned via RTK_VERSION; the upstream
-# install.sh fetches the matching pre-built musl/gnu binary into ~/.local/bin
-# (already on PATH via base). Kept out of the generic base image, which is also
-# used standalone for non-AI dev work.
+# Install rtk into ~/.local/bin. It lives here rather than in base, which is
+# also used for non-agent work.
 RUN RTK_VERSION=${RTK_VERSION} \
     curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh \
     && rtk --version

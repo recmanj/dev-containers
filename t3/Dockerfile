@@ -2,6 +2,8 @@ ARG BASE_TAG=latest
 # The claude image already has Claude Code, Codex and bubblewrap.
 FROM ghcr.io/recmanj/dev-containers/claude:${BASE_TAG}
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
 ARG T3CODE_VERSION=0.1.7
 RUN mkdir -p ~/.local/share/t3 \

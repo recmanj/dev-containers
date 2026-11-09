@@ -11,7 +11,7 @@ RUN apt-get update \
     bubblewrap \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-USER dev
+USER ${USER}
 
 RUN npm i -g @openai/codex@${CODEX_CLI_VERSION} \
     && mkdir -p ~/.local/bin \

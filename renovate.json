@@ -6,6 +6,9 @@
   "minimumReleaseAge": "3 days",
   "internalChecksFilter": "strict",
   "platformAutomerge": false,
+  "pre-commit": {
+    "enabled": true
+  },
   "customManagers": [
     {
       "customType": "regex",

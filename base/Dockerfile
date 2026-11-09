@@ -2,6 +2,8 @@ FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
 FROM alpine/helm:4.3.1 AS helm
 FROM debian:trixie
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 LABEL devcontainer.metadata='[]'
 
 ARG USER=dev
@@ -28,12 +30,13 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --break-system-packages PyYAML
+RUN pip install --no-cache-dir --break-system-packages PyYAML
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
-# Install GH CLI
 ARG TARGETARCH
+
+# Install GitHub CLI
 # renovate: datasource=github-releases depName=cli/cli
 ARG GH_VERSION=2.103.3
 RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
@@ -76,12 +79,9 @@ USER ${USER}
 
 ENV PATH="/home/${USER}/.local/bin:${PATH}"
 
-# Set uv cache / tool dir environment variables
-ENV UV_CACHE_DIR=/tmp/uv-cache
-ENV UV_TOOL_DIR=/tmp/uv-tools
-
-# Set pixi cache dir
-ENV PIXI_CACHE_DIR=/tmp/pixi-cache
+ENV UV_CACHE_DIR=/tmp/uv-cache \
+    UV_TOOL_DIR=/tmp/uv-tools \
+    PIXI_CACHE_DIR=/tmp/pixi-cache
 
 # Install Ansible
 RUN UV_TOOL_DIR=/home/${USER}/.local/share/uv/tools \
