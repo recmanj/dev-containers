@@ -7,7 +7,20 @@ HOST_PATH="$(pwd)"
 VOLUME_NAME="dev-container-$(printf '%s' "$HOST_PATH" | shasum -a 256 | cut -c1-12)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
 
-exec podman run -it --rm \
+# Python: uv keeps the project venv in a per-project volume outside the
+# project tree, so no .venv appears on the host.
+DEP_ARGS=(
+  -e UV_PROJECT_ENVIRONMENT="$CONTAINER_HOME/.project-venv"
+  -v "$VOLUME_NAME-uv-venv":"$CONTAINER_HOME/.project-venv"
+)
+# Node can't relocate node_modules, so shadow it with a volume to keep
+# container-built packages off the host. It is mounted even without a
+# package.json, so a project the agent creates mid-session is covered too.
+# The mount point shows up as an empty dir on the host; it is removed on exit.
+NODE_MODULES_VOLUME="$VOLUME_NAME-node_modules"
+DEP_ARGS+=(-v "$NODE_MODULES_VOLUME":"$HOST_PATH/node_modules")
+
+podman run -it --rm \
   --userns=keep-id:uid=1000,gid=1000 \
   --security-opt no-new-privileges \
   --cap-drop all \
@@ -16,10 +29,31 @@ exec podman run -it --rm \
   -v ~/.pi/agent:$CONTAINER_HOME/.pi/agent \
   -v ~/.local/share/opencode:$CONTAINER_HOME/.local/share/opencode \
   -v "$HOST_PATH":"$HOST_PATH" \
-  -v "$VOLUME_NAME-venv":"$HOST_PATH/.venv" \
-  -v "$VOLUME_NAME-node_modules":"$HOST_PATH/node_modules" \
+  "${DEP_ARGS[@]}" \
   -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github":ro \
   -w "$HOST_PATH" \
   -- \
   "$IMAGE" \
-  "$@"
+  "$@" <&0 &
+PODMAN_PID=$!
+# Run podman in the background so the cleanup below still runs when the
+# wrapper is signalled (e.g. t3code stopping a session); forward each signal
+# unchanged.
+for sig in INT TERM HUP; do
+  trap "kill -$sig \"\$PODMAN_PID\" 2>/dev/null" "$sig"
+done
+set +e
+wait "$PODMAN_PID"
+STATUS=$?
+while kill -0 "$PODMAN_PID" 2>/dev/null; do
+  wait "$PODMAN_PID"
+  STATUS=$?
+done
+
+# Remove the empty node_modules mount point, unless another container for
+# this project still has it mounted. rmdir never removes a non-empty dir.
+if [ -d "$HOST_PATH/node_modules" ] &&
+  [ -z "$(podman ps -q --filter volume="$NODE_MODULES_VOLUME" 2>/dev/null)" ]; then
+  rmdir "$HOST_PATH/node_modules" 2>/dev/null
+fi
+exit "$STATUS"
