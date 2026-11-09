@@ -43,6 +43,13 @@ jobs:
       context: claude
       no-cache: ${{ inputs.no-cache == true }}
 
+  build-t3:
+    needs: build-claude
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      context: t3
+      no-cache: ${{ inputs.no-cache == true }}
+
   build-codex:
     needs: build-base-agent
     uses: ./.github/workflows/build-image.yaml

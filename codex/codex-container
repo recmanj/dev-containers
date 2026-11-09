@@ -6,31 +6,8 @@ CONTAINER_HOME=/home/dev
 HOST_PATH="$(pwd)"
 VOLUME_NAME="dev-container-$(printf '%s' "$HOST_PATH" | shasum -a 256 | cut -c1-12)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
-
 TTY_FLAGS=(-i)
 [ -t 0 ] && [ -t 1 ] && TTY_FLAGS=(-it)
-
-EXTRA_ARGS=()
-# Inside a git worktree, .git points at the main repo's git dir; mount it too
-# so git works in the container.
-GIT_COMMON_DIR="$(git -C "$HOST_PATH" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-case "$GIT_COMMON_DIR" in
-  "" | "$HOST_PATH"/*) ;;
-  *) EXTRA_ARGS+=(-v "$GIT_COMMON_DIR":"$GIT_COMMON_DIR") ;;
-esac
-
-# t3code hands the agent paths to uploaded files; mount them read-only.
-T3_ATTACHMENTS="${T3CODE_HOME:-$HOME/.t3}/userdata/attachments"
-if [ -d "$T3_ATTACHMENTS" ]; then
-  EXTRA_ARGS+=(-v "$T3_ATTACHMENTS":"$T3_ATTACHMENTS":ro)
-fi
-
-# Forward OpenAI settings from the environment (e.g. GUI per-provider env vars),
-# plus any names listed in DEV_CONTAINER_ENV.
-for var in $(compgen -e); do
-  case "$var" in OPENAI_*) EXTRA_ARGS+=(-e "$var") ;; esac
-done
-for var in ${DEV_CONTAINER_ENV:-}; do EXTRA_ARGS+=(-e "$var"); done
 
 exec podman run "${TTY_FLAGS[@]}" --rm \
   --userns=keep-id:uid=1000,gid=1000 \
@@ -44,7 +21,6 @@ exec podman run "${TTY_FLAGS[@]}" --rm \
   -v "$VOLUME_NAME-venv":"$HOST_PATH/.venv" \
   -v "$VOLUME_NAME-node_modules":"$HOST_PATH/node_modules" \
   -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/github":ro \
-  ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
   -w "$HOST_PATH" \
   -- \
   "$IMAGE" \
