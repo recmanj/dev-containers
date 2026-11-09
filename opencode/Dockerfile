@@ -1,6 +1,8 @@
 ARG BASE_TAG=latest
 FROM ghcr.io/recmanj/dev-containers/base-agent:${BASE_TAG}
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG USER=dev
 ENV PATH="/home/${USER}/.opencode/bin:${PATH}"
 

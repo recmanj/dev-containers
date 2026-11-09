@@ -1,0 +1,8 @@
+# Distro packages are left unpinned on purpose: the nightly build picks up
+# their updates. Everything downloaded by hand is pinned and bumped by Renovate.
+ignored:
+  - DL3008 # apt-get install without versions
+  - DL3013 # pip install without versions
+  - DL3041 # dnf install without versions
+  - DL3003 # cd inside RUN
+failure-threshold: warning

@@ -1,0 +1,55 @@
+name: Scan
+
+# Scans the published images after the nightly build. Results show up under
+# Security → Code scanning; the job only fails if the scan itself breaks.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Leaf images only; each one includes its parents.
+        image:
+          - t3
+          - codex
+          - gemini
+          - opencode
+          - pi
+          - distrobox/oxidian
+          - distrobox/ecmwf
+          - distrobox/eodh
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: grype
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
+          fail-build: false
+          only-fixed: true
+          output-format: sarif
+
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+          category: ${{ matrix.image }}

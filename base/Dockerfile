@@ -2,6 +2,8 @@ FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
 FROM alpine/helm:4.3.1 AS helm
 FROM debian:trixie
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 LABEL devcontainer.metadata='[]'
 
 ARG USER=dev
@@ -28,7 +30,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --break-system-packages PyYAML
+RUN pip install --no-cache-dir --break-system-packages PyYAML
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 

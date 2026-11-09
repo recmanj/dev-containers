@@ -165,6 +165,13 @@ PR builds push images tagged `pr-<number>`, and child images build on their
 parent's PR tag, so a change to `base` is tested through the whole chain
 before merge.
 
+## Checks
+
+The Lint workflow runs [pre-commit](https://pre-commit.com/) with hadolint,
+shellcheck, actionlint and zizmor. Run `pre-commit install` to get the same
+checks locally. The Scan workflow runs Grype against the published images
+every night and reports findings under *Security → Code scanning*.
+
 ## License
 
 [MIT](LICENSE)

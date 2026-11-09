@@ -3,8 +3,26 @@ name: Build
 on:
   push:
     branches: main
+    paths-ignore:
+      - "**.md"
+      - LICENSE
+      - renovate.json
+      - .pre-commit-config.yaml
+      - .hadolint.yaml
+      - zizmor.yml
+      - .github/workflows/lint.yaml
+      - .github/workflows/scan.yaml
   pull_request:
     branches: main
+    paths-ignore:
+      - "**.md"
+      - LICENSE
+      - renovate.json
+      - .pre-commit-config.yaml
+      - .hadolint.yaml
+      - zizmor.yml
+      - .github/workflows/lint.yaml
+      - .github/workflows/scan.yaml
   schedule:
     - cron: "0 4 * * *"
   workflow_dispatch:
@@ -22,16 +40,21 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   build-base:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/build-image.yaml
     with:
       context: base
       no-cache: ${{ inputs.no-cache == true }}
 
   build-base-agent:
+    permissions:
+      contents: read
+      packages: write
     needs: build-base
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -39,6 +62,9 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-claude:
+    permissions:
+      contents: read
+      packages: write
     needs: build-base-agent
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -46,6 +72,9 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-t3:
+    permissions:
+      contents: read
+      packages: write
     needs: build-claude
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -53,6 +82,9 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-codex:
+    permissions:
+      contents: read
+      packages: write
     needs: build-base-agent
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -60,6 +92,9 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-gemini:
+    permissions:
+      contents: read
+      packages: write
     needs: build-base-agent
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -67,6 +102,9 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-opencode:
+    permissions:
+      contents: read
+      packages: write
     needs: build-base-agent
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -74,6 +112,9 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-pi:
+    permissions:
+      contents: read
+      packages: write
     needs: build-base-agent
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -81,12 +122,18 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-distrobox-base:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/build-image.yaml
     with:
       context: distrobox/base
       no-cache: ${{ inputs.no-cache == true }}
 
   build-distrobox-oxidian:
+    permissions:
+      contents: read
+      packages: write
     needs: build-distrobox-base
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -94,6 +141,9 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-distrobox-ecmwf:
+    permissions:
+      contents: read
+      packages: write
     needs: build-distrobox-base
     uses: ./.github/workflows/build-image.yaml
     with:
@@ -101,6 +151,9 @@ jobs:
       no-cache: ${{ inputs.no-cache == true }}
 
   build-distrobox-eodh:
+    permissions:
+      contents: read
+      packages: write
     needs: build-distrobox-base
     uses: ./.github/workflows/build-image.yaml
     with:

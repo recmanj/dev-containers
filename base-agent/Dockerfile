@@ -1,6 +1,8 @@
 ARG BASE_TAG=latest
 FROM ghcr.io/recmanj/dev-containers/base:${BASE_TAG}
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG USER=dev
 # renovate: datasource=npm depName=@playwright/mcp
 ARG PLAYWRIGHT_MCP_VERSION=0.0.84
