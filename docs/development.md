@@ -42,6 +42,6 @@ their own PR. Pending updates are listed on the Dependency Dashboard issue.
   Changes to docs and lint config don't trigger it.
 - **Lint** runs [pre-commit](https://pre-commit.com/) with hadolint,
   shellcheck, actionlint and zizmor. Run `pre-commit install` to get the same
-  checks locally.
+  checks locally; the hadolint hook uses the `hadolint` on your `PATH`.
 - **Scan** runs Grype against the published images every night and reports
   findings under *Security → Code scanning*.
