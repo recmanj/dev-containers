@@ -1,0 +1,28 @@
+# Podman Quadlet: runs the t3code server as a systemd user service.
+# Install: copy to ~/.config/containers/systemd/, then
+#   systemctl --user daemon-reload && systemctl --user start t3
+[Unit]
+Description=t3code server
+
+[Container]
+Image=ghcr.io/recmanj/dev-containers/t3:latest
+ContainerName=t3
+UserNS=keep-id:uid=1000,gid=1000
+NoNewPrivileges=true
+DropCapability=all
+Unmask=/proc/*
+PublishPort=127.0.0.1:3773:3773
+EnvironmentFile=%h/.config/dev-containers/.env
+Volume=%h/.config/dev-containers/t3:/home/dev/.t3
+Volume=%h/.claude:/home/dev/.claude
+Volume=%h/.claude.json:/home/dev/.claude.json
+Volume=%h/.codex:/home/dev/.codex
+Volume=%h/.config/dev-containers/github:/home/dev/.ssh/github:ro
+# Projects are mounted at the same path, so paths match on host and container.
+Volume=%h/Code:%h/Code
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

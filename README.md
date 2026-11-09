@@ -6,7 +6,7 @@ Podman container images for AI coding agents, published to
 Image hierarchy:
 
 ```
-base ── base-agent ── claude
+base ── base-agent ── claude ── t3
                    ── gemini
                    ── codex
                    ── opencode
@@ -76,29 +76,38 @@ PR builds push images as `pr-<number>`, and child images build `FROM` their
 parent's `pr-<number>` tag (the `BASE_TAG` build arg), so a change to `base`
 is tested through the whole image chain before merge.
 
-## GUI clients (t3code)
+## t3code server
 
-`claude-container` and `codex-container` can stand in for the `claude` and
-`codex` binaries in GUI clients such as [t3code](https://github.com/pingdotgg/t3code).
-Set **Settings → <provider> → Binary path** to the wrapper's absolute path and
-leave the HOME / `CLAUDE_CONFIG_DIR` / `CODEX_HOME` fields empty: the wrappers
-mount `~/.claude` and `~/.codex` themselves, and host paths in those fields
-don't exist inside the container.
+The `t3` image runs the [t3code](https://github.com/pingdotgg/t3code) server
+with Claude Code and Codex in one long-lived container. The desktop and mobile
+apps connect to it as a remote environment, so agents, terminals and git all
+run inside the container.
 
-What the wrappers do for this:
+`t3/t3.container` is a Podman Quadlet that runs it as a systemd user service.
+It publishes the server on `127.0.0.1:3773` only, mounts `~/Code` at the same
+path (edit the last `Volume=` line for other project folders) and keeps t3's
+data in `~/.config/dev-containers/t3`, apart from the desktop app's `~/.t3`.
 
-- Use `-i` instead of `-it` when there is no terminal, since GUIs talk to the
-  agent over stdin/stdout.
-- When run from a git worktree (t3code puts each task in one), also mount the
-  main repo's git directory so git works inside the container.
-- Mount t3code's attachments folder (`${T3CODE_HOME:-~/.t3}/userdata/attachments`)
-  read-only at the same path, since t3code passes the agent host paths to
-  uploaded files. The rest of `~/.t3` (database, secrets) stays unmounted.
-- Forward the provider's environment variables, including t3code's
-  per-instance **Environment variables**: `ANTHROPIC_*`, `CLAUDE_CODE_*` and
-  `CLAUDE_AGENT_SDK_*` for Claude, `OPENAI_*` for Codex. To forward anything
-  else, list the names in `DEV_CONTAINER_ENV` (space-separated), e.g. as
-  another instance variable.
+```sh
+mkdir -p ~/.config/dev-containers/t3 ~/.config/containers/systemd
+cp t3/t3.container ~/.config/containers/systemd/
+systemctl --user daemon-reload
+systemctl --user start t3
+loginctl enable-linger "$(id -un)"   # keep it running after logout
+```
+
+Connect the apps:
+
+- **Desktop:** turn off **Settings → Environments → Local environment**
+  so nothing runs on the host, then add `http://127.0.0.1:3773` as an
+  environment with a token from `podman exec t3 t3 pair`.
+- **Phone over Tailscale:** expose the port on the host with
+  `tailscale serve --bg 3773`, then add `https://<machine>.<tailnet>.ts.net`
+  in the app with a fresh token from `podman exec t3 t3 pair`. Ignore the
+  pairing URL it prints; that is the container's own address.
+
+Update with `podman pull ghcr.io/recmanj/dev-containers/t3:latest` and
+`systemctl --user restart t3`.
 
 ## Codex sandbox
 
