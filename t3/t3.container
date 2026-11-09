@@ -13,13 +13,19 @@ DropCapability=all
 Unmask=/proc/*
 PublishPort=127.0.0.1:3773:3773
 EnvironmentFile=%h/.config/dev-containers/.env
-Volume=%h/.config/dev-containers/t3:/home/dev/.t3
-Volume=%h/.claude:/home/dev/.claude
-Volume=%h/.claude.json:/home/dev/.claude.json
-Volume=%h/.codex:/home/dev/.codex
-Volume=%h/.config/dev-containers/github:/home/dev/.ssh/github:ro
-# Projects are mounted at the same path, so paths match on host and container.
+# Use the host's home path inside the container, so ~ and project paths are
+# the same on both sides. The home itself (t3 data in .t3, caches) is kept in
+# ~/.config/dev-containers/t3.
+Environment=HOME=%h
+WorkingDir=%h
+Volume=%h/.config/dev-containers/t3:%h
+Volume=%h/.claude:%h/.claude
+Volume=%h/.claude.json:%h/.claude.json
+Volume=%h/.codex:%h/.codex
 Volume=%h/Code:%h/Code
+Volume=%h/Oxidian/Code:%h/Oxidian/Code
+# ssh finds keys via the image user's home, not $HOME.
+Volume=%h/.config/dev-containers/github:/home/dev/.ssh/github:ro
 
 [Service]
 Restart=on-failure

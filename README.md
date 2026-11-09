@@ -84,9 +84,15 @@ apps connect to it as a remote environment, so agents, terminals and git all
 run inside the container.
 
 `t3/t3.container` is a Podman Quadlet that runs it as a systemd user service.
-It publishes the server on `127.0.0.1:3773` only, mounts `~/Code` at the same
-path (edit the last `Volume=` line for other project folders) and keeps t3's
-data in `~/.config/dev-containers/t3`, apart from the desktop app's `~/.t3`.
+It publishes the server on `127.0.0.1:3773` only. Inside the container `HOME`
+is your host home path, so `~/Code` and project paths are the same as on the
+host. Only your project folders (`~/Code`, `~/Oxidian/Code`), `~/.claude` and
+`~/.codex` are mounted from your real home
+(add `Volume=` lines for other project folders); the rest of the container's
+home, including t3's data in `.t3`, lives in `~/.config/dev-containers/t3`,
+apart from the desktop app's `~/.t3`. To keep your existing projects and
+threads, copy them in before the first start, with the desktop app closed:
+`mkdir -p ~/.config/dev-containers/t3/.t3 && cp -a ~/.t3/userdata ~/.config/dev-containers/t3/.t3/`.
 
 ```sh
 mkdir -p ~/.config/dev-containers/t3 ~/.config/containers/systemd
