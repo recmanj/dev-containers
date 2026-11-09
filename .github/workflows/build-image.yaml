@@ -1,3 +1,5 @@
+name: Build image
+
 on:
   workflow_call:
     inputs:

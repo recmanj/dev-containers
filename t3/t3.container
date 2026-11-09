@@ -23,7 +23,8 @@ Volume=%h/.claude:%h/.claude
 Volume=%h/.claude.json:%h/.claude.json
 Volume=%h/.codex:%h/.codex
 Volume=%h/Code:%h/Code
-Volume=%h/Oxidian/Code:%h/Oxidian/Code
+# Add a line like this for each project folder outside ~/Code:
+#Volume=%h/Projects:%h/Projects
 # ssh finds keys via the image user's home, not $HOME.
 Volume=%h/.config/dev-containers/github:/home/dev/.ssh/github:ro
 
