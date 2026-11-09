@@ -23,6 +23,34 @@ ships a `<name>-container` wrapper script that runs the image with rootless
 podman (`--userns=keep-id`, `--security-opt no-new-privileges`, `--cap-drop
 all`).
 
+## Building locally
+
+Run the build script with Podman installed:
+
+```sh
+./build.sh t3                    # build base → base-agent → claude → t3
+./build.sh codex gemini          # build shared parents once, then both agents
+./build.sh distrobox/eodh        # build distrobox/base, then distrobox/eodh
+./build.sh                      # build every image
+./build.sh --no-cache codex      # rebuild codex and its parents without cache
+./build.sh --dry-run t3          # preview the commands
+```
+
+Builds use `linux/amd64`, matching CI, and stay in local Podman storage;
+nothing is pushed and GHCR login is not needed for the locally built parents.
+External base images and tool downloads still need network access. On other
+architectures, building requires amd64 emulation configured on the host.
+
+By default, images are tagged `ghcr.io/recmanj/dev-containers/<name>:latest`,
+replacing that tag locally so the existing wrapper scripts and t3 Quadlet can
+use them. Recreate an existing container to use the new image
+(for t3, `systemctl --user restart t3`). To keep your local `latest` tags,
+use `./build.sh --tag local t3`; all parents use the same tag. Run that image
+explicitly or change the wrapper/Quadlet image reference to `:local`.
+
+The script can be invoked from any working directory and stops on the first
+failed build.
+
 ## Distrobox images
 
 Separate Fedora-based images for [distrobox](https://distrobox.it/), with all
