@@ -1,7 +1,9 @@
-FROM ghcr.io/recmanj/dev-containers/base-agent:latest
+ARG BASE_TAG=latest
+FROM ghcr.io/recmanj/dev-containers/base-agent:${BASE_TAG}
 
 ARG USER=dev
-ARG CODEX_CLI_VERSION=latest
+# renovate: datasource=npm depName=@openai/codex
+ARG CODEX_CLI_VERSION=0.166.0
 
 USER root
 RUN apt-get update \

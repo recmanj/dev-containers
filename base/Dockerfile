@@ -1,5 +1,4 @@
 FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
-FROM bitnami/kubectl:latest AS kubectl
 FROM alpine/helm:4.3.1 AS helm
 FROM debian:trixie
 
@@ -35,20 +34,29 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 
 # Install GH CLI
 ARG TARGETARCH
-RUN GH_VERSION=2.103.3 \
-    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
+# renovate: datasource=github-releases depName=cli/cli
+ARG GH_VERSION=2.103.3
+RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
     | tar -C /usr/local -xz --strip-components=1 --wildcards '*/bin/*' '*/share/*'
 
 # Install Kubernetes tools
-COPY --from=kubectl /opt/bitnami/kubectl/bin/kubectl /usr/local/bin/kubectl
+# renovate: datasource=github-releases depName=kubernetes/kubernetes
+ARG KUBECTL_VERSION=v1.37.2
+RUN curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl" \
+        -o /usr/local/bin/kubectl \
+    && echo "$(curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl.sha256")  /usr/local/bin/kubectl" \
+    | sha256sum -c - \
+    && chmod +x /usr/local/bin/kubectl
 COPY --from=helm /usr/bin/helm /usr/local/bin/helm
-RUN KUSTOMIZE_VERSION=v5.8.3 \
-    && curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_${TARGETARCH}.tar.gz" \
+# renovate: datasource=github-releases depName=kubernetes-sigs/kustomize extractVersion=^kustomize/(?<version>.+)$
+ARG KUSTOMIZE_VERSION=v5.8.3
+RUN curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_${TARGETARCH}.tar.gz" \
     | tar -C /usr/local/bin -xz kustomize
 
 # Install pixi
-RUN PIXI_VERSION=0.84.1 \
-    && case "${TARGETARCH}" in \
+# renovate: datasource=github-releases depName=prefix-dev/pixi
+ARG PIXI_VERSION=0.84.1
+RUN case "${TARGETARCH}" in \
         amd64) PIXI_ARCH=x86_64 ;; \
         arm64) PIXI_ARCH=aarch64 ;; \
     esac \

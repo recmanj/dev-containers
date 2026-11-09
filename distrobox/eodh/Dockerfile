@@ -1,4 +1,5 @@
-FROM ghcr.io/recmanj/dev-containers/distrobox/base:latest
+ARG BASE_TAG=latest
+FROM ghcr.io/recmanj/dev-containers/distrobox/base:${BASE_TAG}
 
 # HashiCorp has no Fedora 45 repo yet; pin it to 44 (terraform is a static binary).
 RUN dnf -y install awscli2 helm k9s kubectl kustomize \

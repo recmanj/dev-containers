@@ -12,6 +12,12 @@ on:
         type: boolean
         default: false
 
+# A newer push to the same PR cancels the older run, so the pr-<number>
+# parent images can't be swapped out mid-run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   packages: write

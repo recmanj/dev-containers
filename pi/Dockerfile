@@ -1,9 +1,13 @@
-FROM ghcr.io/recmanj/dev-containers/base-agent:latest
+ARG BASE_TAG=latest
+FROM ghcr.io/recmanj/dev-containers/base-agent:${BASE_TAG}
 
-# The installer defaults to ~/.pi/agent/install, which the wrapper script
-# bind-mounts from the host at runtime and would hide the binary. Install
-# elsewhere; the ~/.local/bin/pi symlink stays on PATH.
-RUN curl -fsSL https://pi.dev/install.sh | PI_CODING_AGENT_DIR=/home/dev/.local/share/pi-agent sh \
+# Install from npm rather than pi.dev/install.sh, which always installs the
+# latest release. The global npm prefix lives under fnm (already on PATH),
+# away from ~/.pi/agent, which the wrapper bind-mounts from the host.
+# --ignore-scripts matches what the official installer does.
+# renovate: datasource=npm depName=@earendil-works/pi-coding-agent
+ARG PI_VERSION=1.5.0
+RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}" \
     && pi --version \
     && ls -l "$(command -v pi)"
 
