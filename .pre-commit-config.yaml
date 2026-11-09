@@ -18,8 +18,8 @@ repos:
     hooks:
       - id: shellcheck
 
-  - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
-    rev: 357f7eec6dec49bf7693dc0dbec30212226d5492  # frozen: v1.7.12.25
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
     hooks:
       - id: actionlint
 
