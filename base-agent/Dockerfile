@@ -1,7 +1,10 @@
-FROM ghcr.io/recmanj/dev-containers/base:latest
+ARG BASE_TAG=latest
+FROM ghcr.io/recmanj/dev-containers/base:${BASE_TAG}
 
 ARG USER=dev
+# renovate: datasource=npm depName=@playwright/mcp
 ARG PLAYWRIGHT_MCP_VERSION=0.0.84
+# renovate: datasource=github-releases depName=rtk-ai/rtk
 ARG RTK_VERSION=v1.1.0
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/home/${USER}/.cache/ms-playwright

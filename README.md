@@ -36,9 +36,9 @@ fedora-toolbox:45 ── distrobox/base ── oxidian
 ```
 
 `distrobox/base` holds the tools shared by every box (git, jq, make, vim, yq).
-The Fedora image is pinned by version and digest; Dependabot bumps it, and the
-nightly build picks up dnf package updates. Versions downloaded outside dnf
-(e.g. `SOPS_VERSION` in `distrobox/oxidian`) are bumped by hand.
+The Fedora image is pinned by version and digest; Renovate bumps it (see
+[Version updates](#version-updates)), and the nightly build picks up dnf
+package updates.
 
 Use them from a `distrobox.ini`:
 
@@ -50,6 +50,31 @@ image=ghcr.io/recmanj/dev-containers/distrobox/eodh:latest
 The repo is private, so log in once with `podman login ghcr.io` (a token with
 `read:packages`). After an image update, recreate the boxes with
 `distrobox assemble create --replace`.
+
+## Version updates
+
+[Renovate](https://docs.renovatebot.com/) keeps every pinned version current
+(`renovate.json`):
+
+- `FROM` images and GitHub Actions are picked up automatically.
+- Tools downloaded in a Dockerfile are pinned as an `ARG` with a comment that
+  tells Renovate where they are released:
+
+  ```dockerfile
+  # renovate: datasource=github-releases depName=cli/cli
+  ARG GH_VERSION=2.103.3
+  ```
+
+  Add the same comment when pinning a new tool.
+
+Releases must be at least 3 days old before Renovate proposes them. Minor,
+patch and digest updates are grouped into one `tooling` PR and merged once CI
+passes; major updates get their own PR for review. Pending updates are listed
+on the Dependency Dashboard issue.
+
+PR builds push images as `pr-<number>`, and child images build `FROM` their
+parent's `pr-<number>` tag (the `BASE_TAG` build arg), so a change to `base`
+is tested through the whole image chain before merge.
 
 ## Codex sandbox
 
@@ -120,7 +145,7 @@ version bundled inside `@playwright/mcp`, so the two cannot drift.
 ## rtk (token-saving proxy)
 
 The `rtk` binary is pre-installed in the `base-agent` image (pinned via
-`RTK_VERSION` in `base-agent/Dockerfile`.
+`RTK_VERSION` in `base-agent/Dockerfile`).
 
 Agent configs are mounted from the host, so registering rtk's per-agent hook
 is a one-time action per agent (writes land in the host-mounted config dir and

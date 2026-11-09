@@ -1,0 +1,42 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "platformAutomerge": false,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Versions in Dockerfiles marked with a '# renovate:' comment",
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( extractVersion=(?<extractVersion>\\S+))?\\s+ARG \\w+=(?<currentValue>\\S+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "tooling",
+      "automerge": true
+    },
+    {
+      "description": "Fedora publishes the next release's tag before it is final; upgrade majors by hand from the Dependency Dashboard",
+      "matchPackageNames": [
+        "registry.fedoraproject.org/fedora-toolbox"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

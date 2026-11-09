@@ -1,8 +1,10 @@
-FROM ghcr.io/recmanj/dev-containers/distrobox/base:latest
+ARG BASE_TAG=latest
+FROM ghcr.io/recmanj/dev-containers/distrobox/base:${BASE_TAG}
 
 RUN dnf -y install age ansible opentofu uv \
  && dnf clean all
 
+# renovate: datasource=github-releases depName=getsops/sops
 ARG SOPS_VERSION=3.13.3
 RUN curl -fsSL "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" \
       -o /usr/local/bin/sops \

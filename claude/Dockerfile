@@ -1,10 +1,14 @@
-FROM ghcr.io/recmanj/dev-containers/base-agent:latest
+ARG BASE_TAG=latest
+FROM ghcr.io/recmanj/dev-containers/base-agent:${BASE_TAG}
 
-RUN curl -fsSL https://claude.ai/install.sh | bash \
+# renovate: datasource=npm depName=@anthropic-ai/claude-code
+ARG CLAUDE_CODE_VERSION=2.1.318
+RUN curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_CODE_VERSION}" \
     && claude --version
 
 ARG USER=dev
-ARG CODEX_CLI_VERSION=latest
+# renovate: datasource=npm depName=@openai/codex
+ARG CODEX_CLI_VERSION=0.166.0
 
 USER root
 RUN apt-get update \
