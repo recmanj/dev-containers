@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Fake agent wrapper for squad tests. It honours DEV_CONTAINER_EXTRA_VOLUMES
+# (the marker agent-squad looks for) and logs what a wrapper would see to
+# ${FAKE_LOG:-$HOME/fake-<dir>.log}.
+#   fake-container agent BEHAVIOUR [ARGS]   run squad/tests/agent.sh
+# If $FAKE_HIDE is set and bwrap works, the agent runs in a bwrap view that
+# mimics podman: $FAKE_HIDE (the test repo) is hidden, then $PWD and the
+# extra volumes are bound back in the same order as the real wrappers.
+set -euo pipefail
+here=$(dirname -- "$(readlink -f -- "$0")")
+log=${FAKE_LOG:-$HOME/fake-$(basename -- "$PWD").log}
+# Test the TTYs before the block below redirects stdout to the log.
+in_tty=0; out_tty=0
+if [ -t 0 ]; then in_tty=1; fi
+if [ -t 1 ]; then out_tty=1; fi
+{
+  echo "cwd=$(pwd)"
+  echo "PWD=$PWD"
+  echo "stdin_tty=$in_tty"
+  echo "stdout_tty=$out_tty"
+  printf 'volumes<<\n%s\n>>\n' "${DEV_CONTAINER_EXTRA_VOLUMES:-}"
+  printf 'arg=%s\n' "$@"
+} >> "$log"
+[ "${1:-}" = agent ] || exit 0
+shift
+if [ -n "${FAKE_HIDE:-}" ] && bwrap --ro-bind / / true 2>/dev/null; then
+  args=(--ro-bind / / --dev /dev --tmpfs "$FAKE_HIDE" --bind "$PWD" "$PWD")
+  while IFS= read -r spec; do
+    [ -n "$spec" ] || continue
+    IFS=: read -r src dst mode <<< "$spec"
+    if [ "${mode:-}" = ro ]; then args+=(--ro-bind "$src" "$dst"); else args+=(--bind "$src" "$dst"); fi
+  done <<< "${DEV_CONTAINER_EXTRA_VOLUMES:-}"
+  exec bwrap "${args[@]}" --chdir "$PWD" bash -s -- "$@" < "$here/../agent.sh"
+fi
+exec bash -s -- "$@" < "$here/../agent.sh"

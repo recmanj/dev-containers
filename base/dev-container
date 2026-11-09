@@ -6,6 +6,12 @@ CONTAINER_HOME=/home/dev
 HOST_PATH="$(pwd)"
 VOLUME_NAME="dev-container-$(printf '%s' "$HOST_PATH" | shasum -a 256 | cut -c1-12)"
 LOCAL_CONFIG_PATH="$HOME/.config/dev-containers"
+# Extra bind mounts, one `podman -v` spec per line. squad/agent-squad sets this
+# to expose a git worktree's git dir (read-only except objects/refs/logs).
+EXTRA_VOLUMES=()
+while IFS= read -r spec; do
+  if [ -n "$spec" ]; then EXTRA_VOLUMES+=(-v "$spec"); fi
+done <<< "${DEV_CONTAINER_EXTRA_VOLUMES:-}"
 
 PORTS=()
 while [[ $# -gt 0 && "$1" == "-p" ]]; do
@@ -24,6 +30,7 @@ exec podman run -it --rm \
   -v "$HOST_PATH":"$HOST_PATH" \
   -v "$VOLUME_NAME-venv":"$HOST_PATH/.venv" \
   -v "$VOLUME_NAME-node_modules":"$HOST_PATH/node_modules" \
+  ${EXTRA_VOLUMES[@]+"${EXTRA_VOLUMES[@]}"} \
   -v "$LOCAL_CONFIG_PATH/github":"$CONTAINER_HOME/.ssh/id_ed25519" \
   -v "$LOCAL_CONFIG_PATH/kubeconfig":"$CONTAINER_HOME/.kube/config" \
   -w "$HOST_PATH" \

@@ -1,0 +1,488 @@
+#!/usr/bin/env bash
+# agent-squad: run several sandboxed agent wrappers in parallel.
+# One task = one git worktree (.claude/worktrees/squad-NAME, branch squad/NAME)
+# + one tmux session running <agent>-container inside it. See README.md.
+#
+# Rules kept throughout this file:
+#   - no eval, no `sh -c` with interpolated strings;
+#   - host git only through g() (fixed HARDEN flags, explicit --git-dir);
+#   - commands that may legitimately fail appear only in `if` / `||` context;
+#   - functions called in `if` context do not rely on `set -e`.
+set -euo pipefail
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT \
+  GIT_EXTERNAL_DIFF GIT_SSH_COMMAND
+
+die()  { printf 'agent-squad: %s\n' "$*" >&2; exit 1; }
+warn() { printf 'agent-squad: warning: %s\n' "$*" >&2; }
+
+SELF_DIR=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+case $SELF_DIR/ in */.claude/worktrees/squad-*) die "refusing to run from inside a squad worktree: $SELF_DIR";; esac
+
+# ---------------------------------------------------------------- host git
+# Git subcommands this script runs: rev-parse, symbolic-ref, show-ref,
+# for-each-ref, config --file --list, check-ignore, worktree add/remove,
+# status, log, rev-list, diff (--no-ext-diff --no-textconv), merge, branch -D.
+# Review any new subcommand against git's program-spawning config keys.
+HARDEN=(
+  -c core.hooksPath=/dev/null        # never run hooks
+  -c core.fsmonitor=false            # never run an fsmonitor command (bool since git 2.36)
+  -c core.untrackedCache=false
+  -c core.pager=cat -c core.editor=true -c sequence.editor=true
+  -c log.showSignature=false -c commit.gpgSign=false -c tag.gpgSign=false
+  -c merge.verifySignatures=false    # else a repo-config gpg.program runs on merge
+  -c gpg.program=/bin/false -c gpg.ssh.program=/bin/false -c gpg.x509.program=/bin/false
+  -c protocol.allow=never            # no transports, incl. partial-clone lazy fetch
+  -c submodule.recurse=false -c diff.ignoreSubmodules=all
+  -c gc.auto=0 -c maintenance.auto=false
+  -c worktree.useRelativePaths=false
+)
+# diff.external is NOT overridden (an empty value breaks diff); every diff/log
+# here passes --no-ext-diff, and GIT_EXTERNAL_DIFF is unset above.
+g() {
+  GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 \
+    GIT_EDITOR=true GIT_PAGER=cat git --no-pager "${HARDEN[@]}" "$@"
+}
+gc() { g --git-dir="$C" "$@"; }                       # common dir: refs, objects
+gm() { g --git-dir="$C" --work-tree="$MAIN" "$@"; }   # main checkout
+gt() { g --git-dir="$GD" --work-tree="$TOP" "$@"; }   # checkout we were invoked from
+gw() { g --git-dir="$A" --work-tree="$WT" "$@"; }     # task worktree
+
+# Prints uncommitted changes (empty if clean); dies if git status fails.
+# Untracked files are always listed, whatever status.showUntrackedFiles says.
+changes() {   # $1: gw or gt
+  local out
+  out=$("$1" status --porcelain --untracked-files=all --ignore-submodules=all) ||
+    die "cannot tell whether the worktree is clean (git status failed)"
+  printf '%s' "$out"
+}
+
+# Repo-config keys that run programs and that no -c flag can switch off.
+# (alias.* is safe: git ignores aliases that shadow builtins.)
+UNSAFE='^(filter\..+\.(clean|smudge|process)|merge\..+\.driver|include\.path|includeif\..+\.path)$'
+check_config() {   # extra config files to check as arguments
+  local f keys hits='' h
+  for f in "$C/config" "$C/config.worktree" "$@"; do
+    [ -f "$f" ] || continue
+    keys=$(g config --file "$f" --name-only --list) || die "cannot parse $f"
+    h=$(printf '%s\n' "$keys" | grep -iE "$UNSAFE") || h=''
+    [ -z "$h" ] || hits+=$(printf '%s: %s\n' "$f" "$h")$'\n'
+  done
+  if [ -n "$hits" ]; then
+    [ "${AGENT_SQUAD_TRUST_CONFIG:-}" = 1 ] || die "repo config has keys that run programs:
+$hits(review them; AGENT_SQUAD_TRUST_CONFIG=1 overrides)"
+    warn "trusting program-running config keys (AGENT_SQUAD_TRUST_CONFIG=1)"
+  fi
+  if [ -n "$(gc for-each-ref --count=1 refs/replace/)" ]; then
+    warn "refs/replace/* is not empty; agent-squad ignores it (GIT_NO_REPLACE_OBJECTS=1), plain git does not"
+  fi
+}
+
+# ---------------------------------------------------------------- discovery
+repo_init() {
+  local c
+  c=$(g rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || die "not inside a git repository"
+  [ "$(g rev-parse --is-bare-repository)" = false ] || die "bare repositories are not supported"
+  C=$(cd -P -- "$c" && pwd)
+  MAIN=${C%/.git}
+  if [ "$MAIN" = "$C" ] || [ -L "$MAIN/.git" ] || [ ! -d "$MAIN/.git" ] ||
+     [ "$(cd -P -- "$MAIN/.git" && pwd)" != "$C" ]; then
+    die "unsupported layout (submodule, --separate-git-dir or .git symlink): $C"
+  fi
+  case $MAIN in *[:#]*|*$'\n'*) die "repository path contains ':', '#' or a newline: $MAIN";; esac
+  case $(pwd -P)/ in "$MAIN/.claude/worktrees/squad-"*) die "run agent-squad from outside squad worktrees";; esac
+  # The checkout we were invoked from (GD = its git dir, TOP = its work tree).
+  # TOP comes from the gitdir file, not --show-toplevel, which honours a
+  # repo-config core.worktree.
+  GD=$(g rev-parse --absolute-git-dir) || die "cannot resolve git dir"
+  GD=$(cd -P -- "$GD" && pwd)
+  if [ "$GD" = "$C" ]; then TOP=$MAIN
+  else
+    TOP=$(resolve_from "$GD/gitdir" "$GD") || die "cannot resolve the worktree of $GD"
+    TOP=${TOP%/.git}
+  fi
+  REPO=$(basename -- "$MAIN" | tr -c 'A-Za-z0-9_\n-' '_')
+}
+
+NAME_RE='^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$'
+task_init() {
+  [[ $1 =~ $NAME_RE ]] || die "bad task name '$1' (letters, digits, _ and -, max 40)"
+  NAME=$1
+  WT=$MAIN/.claude/worktrees/squad-$NAME
+  A=$C/worktrees/squad-$NAME
+  BR=squad/$NAME
+  SESS=squad-$REPO-$NAME
+  # Same formula as the wrappers' VOLUME_NAME (they hash $(pwd)).
+  VOL=dev-container-$(printf '%s' "$WT" | shasum -a 256 | cut -c1-12)
+}
+
+resolve_from() {   # FILE BASE: first line of FILE, relative to BASE, fully resolved
+  local l
+  l=$(head -n1 -- "$1") || return 1
+  l=${l#gitdir: }
+  case $l in /*) ;; *) l=$2/$l;; esac
+  readlink -f -- "$l"
+}
+
+check_binding() {   # WT and A must point at each other, A at C (sbx §7.5 step 3)
+  local f
+  [ -d "$WT" ] || die "no worktree at $WT"
+  for f in "$WT/.git" "$A" "$A/gitdir" "$A/commondir" "$A/config.worktree"; do
+    [ ! -L "$f" ] || die "unexpected symlink: $f"
+  done
+  if [ ! -f "$WT/.git" ] || ! grep -q '^gitdir: ' "$WT/.git"; then die "$WT/.git is not a gitdir file"; fi
+  [ -d "$A" ] && [ -f "$A/gitdir" ] && [ -f "$A/commondir" ] || die "admin dir $A is missing or incomplete"
+  [ "$(resolve_from "$WT/.git" "$WT")" = "$A" ] || die "$WT/.git does not point at $A"
+  [ "$(resolve_from "$A/gitdir" "$A")" = "$(readlink -f -- "$WT/.git")" ] || die "$A/gitdir does not point at $WT/.git"
+  [ "$(resolve_from "$A/commondir" "$A")" = "$C" ] || die "$A/commondir does not point at $C"
+}
+
+mounts() {   # podman -v specs, parent before child
+  local m=("$C:$C:ro" "$C/objects:$C/objects" "$C/refs:$C/refs" "$C/logs:$C/logs")
+  if [ -d "$C/reftable" ]; then m+=("$C/reftable:$C/reftable"); fi
+  if [ -d "$C/lfs" ]; then m+=("$C/lfs:$C/lfs"); fi
+  m+=("$A:$A" "$A/commondir:$A/commondir:ro" "$A/gitdir:$A/gitdir:ro"
+      "$A/config.worktree:$A/config.worktree:ro" "$WT/.git:$WT/.git:ro")
+  printf '%s\n' "${m[@]}"
+}
+
+prepare() { mkdir -p "$C/logs"; : >> "$A/config.worktree"; }
+
+wrapper() {   # AGENT -> absolute path of the wrapper to run
+  local a=$1 rel='' p=''
+  case $a in
+    */*) p=$a ;;                                    # explicit path: -a ./x/foo-container
+    dev) rel=base/dev-container ;;                  # the only wrapper not named <a>/<a>-container
+    *)   [[ $a =~ ^[a-z][a-z0-9-]*$ ]] || die "bad agent name: $a"
+         rel=$a/$a-container ;;
+  esac
+  if [ -z "$p" ]; then
+    if [ -x "$SELF_DIR/../$rel" ]; then p=$SELF_DIR/../$rel
+    elif ! p=$(command -v -- "${rel##*/}"); then
+      die "no wrapper ${rel##*/} next to agent-squad ($SELF_DIR/../$rel) or on PATH"
+    fi
+  fi
+  [ -f "$p" ] && [ -x "$p" ] || die "not an executable wrapper: $p"
+  p=$(readlink -f -- "$p")
+  case $p in */.claude/worktrees/squad-*) die "refusing wrapper inside a squad worktree: $p";; esac
+  grep -q DEV_CONTAINER_EXTRA_VOLUMES "$p" || die "$p lacks the DEV_CONTAINER_EXTRA_VOLUMES block; git would not work inside (see README)"
+  printf '%s\n' "$p"
+}
+
+# ---------------------------------------------------------------- tmux
+has_tmux() { command -v tmux >/dev/null; }
+sess_exists() { has_tmux && tmux has-session -t "=$SESS" 2>/dev/null; }
+sess_get() { tmux display-message -p -t "=$SESS:" "$1"; }
+sess_check_owner() {   # refuse a same-named session from another repo
+  local p
+  p=$(sess_get '#{session_path}') || die "cannot query tmux session $SESS"
+  [ "$p" = "$WT" ] || die "tmux session $SESS belongs to $p, not $WT"
+}
+sess_state() {
+  if ! sess_exists; then echo stopped; return; fi
+  if [ "$(sess_get '#{session_path}')" != "$WT" ]; then echo foreign; return; fi
+  if [ "$(sess_get '#{pane_dead}')" = 1 ]; then echo "exited $(sess_get '#{pane_dead_status}')"; else echo running; fi
+}
+
+# tmux treats an argument ending in ';' as a command separator; '\;' is a literal ';'.
+tmux_escape() {   # ARGS... -> ESCAPED array
+  local rep='\;'
+  ESCAPED=("${@/%;/"$rep"}")
+}
+
+launch() {   # WRAPPER
+  local w=$1 vols cmd
+  has_tmux || die "tmux not found (3.3 or later needed)"
+  if sess_exists; then
+    sess_check_owner
+    [ "$(sess_get '#{pane_dead}')" = 1 ] || die "$SESS is already running; use: agent-squad attach $NAME"
+    tmux kill-session -t "=$SESS"          # agent exited earlier: relaunch
+  fi
+  vols=$(mounts)
+  # The tmux server's environment may differ from ours: pass PATH and HOME.
+  cmd=(env PATH="$PATH" HOME="$HOME" PWD="$WT" DEV_CONTAINER_EXTRA_VOLUMES="$vols" "$w" ${ARGS[@]+"${ARGS[@]}"})
+  tmux_escape "${cmd[@]}"; cmd=("${ESCAPED[@]}")
+  if ! tmux new-session -d -s "$SESS" -c "$WT" -- "${cmd[@]}" \; set-option -w -t "=$SESS:" remain-on-exit on ||
+     ! tmux has-session -t "=$SESS" 2>/dev/null; then
+    die "the wrapper exited at once; run it by hand to see why:
+  cd $WT && DEV_CONTAINER_EXTRA_VOLUMES=\"\$(agent-squad mounts $NAME)\" $w"
+  fi
+  echo "started $SESS ($w); attach with: agent-squad attach $NAME"
+}
+
+# Sets BUSY to the IDs of containers still using this task's volumes; returns 0 once none remain.
+containers_gone() {   # $1 = seconds to wait
+  BUSY=''
+  command -v podman >/dev/null || return 0
+  local i=0
+  while :; do
+    # every wrapper mounts $VOL-venv; -a also catches exited, not yet --rm'd containers
+    BUSY=$(podman ps -a -q --filter "volume=$VOL-venv") || die "podman ps failed; cannot tell whether containers still use $WT"
+    BUSY=${BUSY//$'\n'/ }
+    [ -n "$BUSY" ] || return 0
+    [ "$i" -lt "$1" ] || return 1
+    sleep 1; i=$((i + 1))
+  done
+}
+
+task_base() {   # upstream of the task branch, else HEAD of the main checkout
+  gc rev-parse -q --verify "refs/heads/$BR@{upstream}" 2>/dev/null || gc rev-parse -q --verify HEAD
+}
+
+# ---------------------------------------------------------------- commands
+cmd_new() {
+  local w='' b rc=0 track=''
+  [ ! -e "$WT" ] && [ ! -e "$A" ] || die "task $NAME already exists ($WT or $A)"
+  if [ -z "$NOSTART" ]; then w=$(wrapper "$AGENT") || exit 1; fi
+  check_config "$GD/config.worktree"
+  if [ -n "$BASE" ]; then
+    case $BASE in -*) die "bad base: $BASE";; esac
+    gc rev-parse -q --verify "$BASE^{commit}" >/dev/null || die "base does not resolve to a commit: $BASE"
+    if gc show-ref -q --verify "refs/heads/$BASE"; then track=--track; fi
+  elif b=$(gt symbolic-ref -q --short HEAD); then
+    BASE=$b track=--track
+  else
+    BASE=$(gt rev-parse --verify HEAD) || die "cannot resolve HEAD"
+  fi
+  mkdir -p "$MAIN/.claude/worktrees"
+  [ "$(cd -P -- "$MAIN/.claude/worktrees" && pwd)" = "$MAIN/.claude/worktrees" ] || die "$MAIN/.claude/worktrees must not be a symlink"
+  gm check-ignore -q -- "$WT" || rc=$?
+  case $rc in
+    0) ;;
+    1) mkdir -p "$C/info"; printf '/.claude/worktrees/\n' >> "$C/info/exclude"
+       echo "added /.claude/worktrees/ to $C/info/exclude" ;;
+    *) die "git check-ignore failed" ;;
+  esac
+  if gc show-ref -q --verify "refs/heads/$BR"; then
+    gc worktree add "$WT" "$BR"
+  else
+    gc worktree add ${track:+"$track"} -b "$BR" "$WT" "$BASE"
+  fi
+  check_binding
+  prepare
+  echo "created $WT on $BR (base $BASE)"
+  if [ -z "$NOSTART" ]; then launch "$w"; fi
+}
+
+cmd_start() {
+  local w
+  check_binding
+  check_config "$A/config.worktree"
+  w=$(wrapper "$AGENT") || exit 1
+  prepare
+  launch "$w"
+}
+
+cmd_ls() {
+  local d n br base head ahead
+  for d in "$MAIN/.claude/worktrees"/squad-*; do
+    [ -d "$d" ] || continue
+    n=${d##*/squad-}
+    [[ $n =~ $NAME_RE ]] || continue
+    task_init "$n"
+    br=$(g --git-dir="$A" symbolic-ref -q --short HEAD 2>/dev/null) || br='(detached)'
+    ahead='?'
+    if base=$(task_base) && head=$(g --git-dir="$A" rev-parse -q --verify HEAD 2>/dev/null); then
+      ahead=$(gc rev-list --count "$base..$head") || ahead='?'
+    fi
+    printf '%-20s %-10s %-28s %5s  %s\n' "$NAME" "$(sess_state)" "$br" "$ahead" "$WT"
+  done
+}
+
+cmd_attach() {
+  sess_exists || die "$SESS is not running; use: agent-squad start $NAME"
+  sess_check_owner
+  if [ -n "${TMUX:-}" ]; then tmux switch-client -t "=$SESS"; else tmux attach-session -t "=$SESS"; fi
+}
+
+cmd_stop() {
+  sess_exists || die "$SESS is not running"
+  sess_check_owner
+  tmux kill-session -t "=$SESS"
+  if ! containers_gone "${AGENT_SQUAD_STOP_TIMEOUT:-30}"; then
+    warn "containers still use $WT after ${AGENT_SQUAD_STOP_TIMEOUT:-30}s:" "$BUSY" "; run: podman stop" "$BUSY"
+  fi
+  echo "stopped $SESS"
+}
+
+cmd_status() {
+  local base
+  check_binding
+  check_config "$A/config.worktree"
+  gw status --short --branch --ignore-submodules=all
+  base=$(task_base) || die "cannot resolve a base for $BR"
+  echo "--- commits since $(gc rev-parse --short "$base"):"
+  g --git-dir="$A" log --oneline --no-show-signature "$base..HEAD"
+}
+
+# diff and merge see commits only; say so when the agent left work uncommitted.
+warn_uncommitted() {
+  local d
+  [ -d "$WT" ] || return 0
+  check_binding
+  check_config "$A/config.worktree"
+  d=$(changes gw) || exit 1
+  [ -z "$d" ] || warn "$WT has uncommitted changes, not shown and not merged (commit them in the task first):
+$d"
+}
+
+cmd_diff() {
+  local base
+  check_config
+  base=$(task_base) || die "cannot resolve a base for $BR"
+  gc diff --no-ext-diff --no-textconv ${STAT:+"$STAT"} "$base...refs/heads/$BR"
+  warn_uncommitted
+}
+
+SENSITIVE=(.claude .husky .githooks .vscode .envrc .gitattributes .gitmodules Makefile package.json)
+cmd_merge() {
+  local tgt sens ans dirty obj
+  check_config "$GD/config.worktree"
+  # A running agent can move its branch (refs/ is writable inside), so stop it first.
+  if sess_exists; then die "$SESS is running; run: agent-squad stop $NAME"; fi
+  containers_gone 0 || die "containers still use $WT:" "$BUSY" "(run: agent-squad stop $NAME)"
+  warn_uncommitted
+  # Resolve once: the sensitive-path check and the merge use the same commit.
+  obj=$(gc rev-parse -q --verify "refs/heads/$BR^{commit}") || die "no branch $BR"
+  if [ "$TOP" != "$MAIN" ] && [ -z "$INTO" ]; then
+    die "you are in $TOP, not the main checkout $MAIN.
+Pass --into BRANCH to merge into the branch checked out here, or run from $MAIN."
+  fi
+  # Full ref, not --short: a tag shadowing the branch makes --short print "heads/NAME".
+  if ! tgt=$(gt symbolic-ref -q HEAD) || [ "${tgt#refs/heads/}" = "$tgt" ]; then
+    die "HEAD of $TOP is detached (colocated jj repo?). Not merging into a detached HEAD.
+git: check out the target branch, then re-run.
+jj:  jj new <target> $BR   (or: jj rebase -b $BR -d <target>)
+Commit to review: $obj"
+  fi
+  tgt=${tgt#refs/heads/}
+  [ -z "$INTO" ] || [ "$INTO" = "$tgt" ] || die "--into $INTO, but $TOP has $tgt checked out"
+  [ "$tgt" != "$BR" ] || die "cannot merge $BR into itself"
+  echo "merging $BR ($obj) into $tgt ($TOP)"
+  dirty=$(changes gt) || exit 1
+  if [ -n "$dirty" ]; then
+    warn "$TOP has uncommitted changes; git refuses only if the merge touches them"
+  fi
+  sens=$(gc diff --no-ext-diff --no-textconv --name-only "refs/heads/$tgt...$obj" -- "${SENSITIVE[@]}")
+  if [ -n "$sens" ]; then
+    printf 'changed paths that can run code on your machine:\n%s\n' "$sens" >&2
+    if [ -t 0 ]; then
+      read -r -p "merge anyway? [y/N] " ans
+      [ "$ans" = y ] || [ "$ans" = Y ] || die "aborted"
+    fi
+  fi
+  cd "$TOP"
+  gt merge --no-ff --no-gpg-sign --no-verify-signatures -m "Merge branch '$BR' at ${obj:0:12} (agent-squad)" "$obj"
+}
+
+cmd_rm() {
+  local v left='' sha dirty t=${AGENT_SQUAD_STOP_TIMEOUT:-30}
+  if sess_exists; then
+    sess_check_owner
+    [ -n "$FORCE" ] || die "$SESS is running; stop it first or use --force"
+    tmux kill-session -t "=$SESS"
+  fi
+  if [ -n "$FORCE" ]; then
+    if ! containers_gone "$t"; then
+      die "containers still use $WT after ${t}s:" "$BUSY" "
+volumes: $VOL $VOL-venv $VOL-node_modules
+run: podman stop" "$BUSY" "  then re-run rm. Nothing was removed."
+    fi
+  elif ! containers_gone 0; then
+    die "containers still use $WT:" "$BUSY" "(run: podman stop" "$BUSY" ")"
+  fi
+  check_binding
+  if [ -z "$FORCE" ]; then
+    check_config "$A/config.worktree"
+    dirty=$(changes gw) || exit 1
+    [ -z "$dirty" ] || die "$WT has uncommitted changes; use --force to discard them"
+  fi
+  cd "$MAIN"
+  # --force twice: also removes a worktree the agent locked (A/locked is writable inside).
+  gc worktree remove --force --force "$WT"
+  echo "removed $WT"
+  if [ -n "$DELBR" ]; then
+    if sha=$(gc rev-parse -q --verify "refs/heads/$BR"); then
+      gc branch -D "$BR" >/dev/null || die "could not delete $BR"
+      echo "deleted $BR (was $sha)"
+    else
+      warn "branch $BR not found; nothing deleted"
+    fi
+  fi
+  if [ -n "$KEEPVOL" ]; then
+    echo "kept volumes: $VOL $VOL-venv $VOL-node_modules"
+  elif ! command -v podman >/dev/null; then
+    echo "podman not found; volumes not removed: $VOL $VOL-venv $VOL-node_modules"
+  else
+    for v in "$VOL" "$VOL-venv" "$VOL-node_modules"; do
+      if podman volume exists "$v"; then podman volume rm "$v" >/dev/null || left+=" $v"; fi
+    done
+    [ -z "$left" ] || die "could not remove volumes:$left"
+  fi
+}
+
+usage() {
+  cat <<'EOF'
+usage: agent-squad COMMAND
+  new NAME [-a AGENT] [-b BASE] [--no-start] [-- AGENT_ARGS...]
+  start NAME [-a AGENT] [-- AGENT_ARGS...]
+  ls
+  attach NAME | stop NAME | status NAME | mounts NAME
+  diff NAME [--stat]
+  merge NAME [--into BRANCH]
+  rm NAME [--force] [--delete-branch] [--keep-volumes]
+AGENT is a name (claude, codex, gemini, opencode, dev, ...) or a path to a
+wrapper; default $AGENT_SQUAD_AGENT or claude.
+EOF
+}
+
+parse() {   # "ALLOWED FLAGS" ARGS...
+  local ok=" $1 "; shift
+  while [ $# -gt 0 ]; do
+    [[ $ok == *" $1 "* ]] || die "unexpected argument: $1 (see agent-squad help)"
+    case $1 in
+      -a|-b|--into)
+        [ $# -ge 2 ] && [ -n "$2" ] && [[ $2 != -* ]] || die "$1 needs a value"
+        case $1 in -a) AGENT=$2;; -b) BASE=$2;; --into) INTO=$2;; esac
+        shift ;;
+      --no-start) NOSTART=1 ;;
+      --force) FORCE=1 ;;
+      --delete-branch) DELBR=1 ;;
+      --keep-volumes) KEEPVOL=1 ;;
+      --stat) STAT=--stat ;;
+      --) shift; ARGS=("$@"); return ;;
+    esac
+    shift
+  done
+}
+
+main() {
+  AGENT=${AGENT_SQUAD_AGENT:-claude} BASE='' INTO='' NOSTART='' FORCE='' DELBR='' KEEPVOL='' STAT=''
+  ARGS=()
+  local sub=${1:-help} flags
+  [ $# -eq 0 ] || shift
+  case $sub in
+    help|-h|--help) usage; return ;;
+    ls) parse "" "$@"; repo_init; cmd_ls; return ;;
+    new)    flags="-a -b --no-start --" ;;
+    start)  flags="-a --" ;;
+    diff)   flags="--stat" ;;
+    merge)  flags="--into" ;;
+    rm)     flags="--force --delete-branch --keep-volumes" ;;
+    attach|stop|status|mounts) flags="" ;;
+    *) usage >&2; exit 2 ;;
+  esac
+  [ $# -ge 1 ] || die "usage: agent-squad $sub NAME"
+  local name=$1; shift
+  [[ $name =~ $NAME_RE ]] || die "bad task name '$name' (letters, digits, _ and -, max 40)"
+  parse "$flags" "$@"
+  repo_init
+  task_init "$name"
+  case $sub in
+    mounts) check_binding; mounts ;;
+    *) "cmd_$sub" ;;
+  esac
+}
+
+# Sourcing (tests) defines the functions without running anything.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
