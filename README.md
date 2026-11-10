@@ -52,6 +52,7 @@ fedora-toolbox ── distrobox/base ── oxidian
 
 - [Agents](docs/agents.md): what the wrappers mount, browser and rtk setup
 - [t3code server](docs/t3.md): running t3 as a service and connecting the apps
+- [T3 development VM](docs/t3-vm.md): KVM, configurable directory shares and container access for agents
 - [Distrobox images](docs/distrobox.md)
 - [Development](docs/development.md): building locally, version updates, CI
 
