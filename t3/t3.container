@@ -11,6 +11,9 @@ UserNS=keep-id:uid=1000,gid=1000
 NoNewPrivileges=true
 DropCapability=all
 Unmask=/proc/*
+# Run an init as PID 1. `t3 serve` doesn't reap orphaned processes, so they
+# pile up as zombies until the pids limit is hit and every spawn fails.
+RunInit=true
 PublishPort=127.0.0.1:3773:3773
 EnvironmentFile=%h/.config/dev-containers/.env
 # Use the host's home path inside the container, so ~ and project paths are
