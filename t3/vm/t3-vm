@@ -1,0 +1,52 @@
+#!/bin/bash
+set -euo pipefail
+
+name=${T3_VM_NAME:-t3-dev}
+host=${T3_VM_HOST:-192.168.122.50}
+user=${T3_VM_USER:-$(id -un)}
+key=${T3_VM_KEY:-$HOME/.ssh/t3-vm}
+ssh_args=(-o ForwardAgent=no -o IdentitiesOnly=yes -i "$key" "$user@$host")
+
+usage() {
+    cat <<'EOF'
+Usage: t3-vm <command> [arguments]
+  status             VM power state
+  start              Start the VM
+  stop               Request a graceful shutdown
+  console            Serial console (Ctrl+] to leave)
+  ssh                Interactive SSH session
+  run COMMAND [ARG…] Run a command in the VM's login environment
+  logs               Follow the T3 service log
+
+Override defaults with T3_VM_NAME, T3_VM_HOST, T3_VM_USER, T3_VM_KEY.
+For shell expressions: t3-vm run bash -lc 'cd ~/Code/project && npm test'
+EOF
+}
+
+remote_run() {
+    local command quoted
+    printf -v command '%q ' "$@"
+    printf -v quoted '%q' "$command"
+    exec ssh "${ssh_args[@]}" "bash -lc $quoted"
+}
+
+action=${1:-help}
+if [ "$#" -gt 0 ]; then shift; fi
+if [ "$action" != run ] && [ "$#" -gt 0 ]; then
+    usage >&2
+    exit 2
+fi
+case "$action" in
+    status) exec sudo virsh -c qemu:///system domstate "$name" ;;
+    start) exec sudo virsh -c qemu:///system start "$name" ;;
+    stop) exec sudo virsh -c qemu:///system shutdown "$name" ;;
+    console) exec sudo virsh -c qemu:///system console "$name" ;;
+    ssh) exec ssh "${ssh_args[@]}" ;;
+    run)
+        if [ "$#" -eq 0 ]; then usage >&2; exit 2; fi
+        remote_run "$@"
+        ;;
+    logs) remote_run journalctl --user -u t3.service -f ;;
+    help|--help|-h) usage ;;
+    *) usage >&2; exit 2 ;;
+esac
