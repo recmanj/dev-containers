@@ -12,12 +12,13 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Versions in Dockerfiles marked with a '# renovate:' comment",
+      "description": "Versions in Dockerfiles and VM scripts marked with a '# renovate:' comment",
       "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+        "/(^|/)Dockerfile$/",
+        "/^t3/vm/[^/]+\\.sh$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( extractVersion=(?<extractVersion>\\S+))?\\s+ARG \\w+=(?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( extractVersion=(?<extractVersion>\\S+))?\\s+(ARG )?\\w+=(?<currentValue>\\S+)"
       ]
     }
   ],

@@ -46,6 +46,8 @@ class PrepareTests(unittest.TestCase):
         self.assertNotIn("CONTAINER_HOST", service)
         self.assertNotIn("DOCKER_HOST", service)
         self.assertNotIn("Volume=", service)
+        tools = next(f for f in cloud["write_files"] if f["path"] == "/opt/t3/mise.toml")
+        self.assertIn('kubectl = "', tools["content"])
         self.assertNotIn("podman", result["user-data"])
         self.assertIn("ExecStartPre=/usr/bin/docker info", service)
         self.assertIn("docker", cloud["groups"])

@@ -182,7 +182,21 @@ ip-dhcp-host` with the generated `reservation.xml`, for both `--live` and `--con
 Development tools include `gh`, uv and mise, with Node 24 as the default.
 Use `mise use node@22` in a project to select another version. Mise shims are
 on PATH in Bash and T3. uv installs the current release; mise is pinned in
-`install-dev-tools.sh`. Re-running that script resets the global Node default to 24.
+`install-dev-tools.sh` and updated by Renovate. Re-running that script resets the global Node default to 24.
+
+Mise also installs DevOps tools globally: yq, rtk, shellcheck, kubectl, helm,
+kustomize, kind, kubeconform, stern, kubectx, k9s, OpenTofu, Terraform and
+tflint. uv installs Ansible, ansible-lint and pre-commit. There is no cloud CLI
+and no cloud credentials, so agents can render, lint and validate, and test
+against a local kind cluster, but not reach real infrastructure.
+
+The mise tools are pinned in `t3/vm/mise.toml`, which Renovate keeps current.
+The script copies it to `~/.config/mise/conf.d/t3-vm.toml`. To pick up new
+versions, pull this repository and re-run the script. uv tools update to
+their current release each time the script runs.
+
+To have agents use rtk, run `rtk init -g` (Claude Code) and
+`rtk init -g --codex` once, then restart T3.
 
 To add these tools to an existing VM, run as your guest user from this checkout:
 
