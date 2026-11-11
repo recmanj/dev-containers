@@ -49,6 +49,8 @@ cat > "$HOME/.config/systemd/user/t3.service.d/dev-tools.conf" <<'EOF'
 Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin
 EOF
 
+bash "$script_dir/install-monitoring.sh"
+
 uv --version
 mise --version
 node --version

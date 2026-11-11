@@ -128,6 +128,31 @@ Use the share's primary group when writing; supplementary-group-only access
 can fail in the single-group namespace. Very large trees may hit the daemon's
 file-descriptor limit.
 
+## Monitoring
+
+[Beszel](https://beszel.dev) runs in the VM: a dashboard on port 8090 and an
+agent it reads over a local socket. It shows CPU, memory, disk, network and
+Docker containers, with history and alerts. T3's agents count toward the VM
+total and aren't listed separately.
+
+New VMs install it during setup. On an existing VM, run
+`bash t3/vm/install-monitoring.sh` from this checkout; re-run it to update.
+
+Open `http://192.168.122.50:8090`, create the admin account, and add a system
+with the socket path the script prints (`/run/user/<uid>/beszel/agent.sock`)
+as its host. The agent already has the hub's key.
+
+### Telegram alerts
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and send it a message.
+2. Get your chat id from `https://api.telegram.org/bot<token>/getUpdates`.
+3. In **Settings → Notifications**, add `telegram://<token>@telegram?chats=<chat id>`.
+4. Click the bell on the `t3-dev` row and enable disk usage above 85% and
+   memory above 90% for 10 minutes. The VM has no swap, so running out of
+   memory kills a process.
+
+Alerts come from the VM, so nothing is sent while it's down.
+
 ## Add a share
 
 New projects inside existing shares need no configuration. For another directory:
