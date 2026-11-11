@@ -7,6 +7,10 @@ if [ "$(id -u)" -eq 0 ]; then
     echo 'Run as the development user, without sudo.' >&2
     exit 1
 fi
+if ! systemd-detect-virt --vm --quiet; then
+    echo 'Run this inside the T3 VM, not on the host.' >&2
+    exit 1
+fi
 
 # renovate: datasource=github-releases depName=henrygd/beszel extractVersion=^v(?<version>.*)$
 beszel_version=0.21.1
