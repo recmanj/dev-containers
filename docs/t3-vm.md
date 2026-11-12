@@ -125,8 +125,23 @@ in named volumes. Don't run agent-written scripts with host sudo without reviewi
 After first boot, verify a Docker-root-created file is owned by your user on
 the host, and check edits and file watchers from both sides.
 Use the share's primary group when writing; supplementary-group-only access
-can fail in the single-group namespace. Very large trees may hit the daemon's
-file-descriptor limit.
+can fail in the single-group namespace.
+
+### Large shares
+
+Each share file the VM has cached keeps one file open on the host, up to
+524288 per share. Past that, the share fails with `Too many open files in
+system`. The `t3-share-guard` service drops the VM's cache at 250000 cached
+files, which costs a slower next access. `journalctl -u t3-share-guard` shows
+each drop.
+
+New VMs install it during setup. On an existing VM, run
+`sudo bash t3/vm/install-share-guard.sh` from this checkout.
+
+Frequent drops mean something walks a very large tree. Check for leftover
+agent worktrees first: each is a full checkout with its own dependencies.
+On the host, `du --inodes -d2 <share> | sort -n | tail` finds them and
+`git worktree remove` deletes one.
 
 ## Monitoring
 

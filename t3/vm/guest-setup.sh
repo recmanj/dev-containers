@@ -46,6 +46,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 systemctl enable --now docker.service
 
 systemctl enable --now qemu-guest-agent
+bash /opt/t3/install-share-guard.sh
 loginctl enable-linger "$guest_user"
 systemctl start "user@${guest_uid}.service"
 
