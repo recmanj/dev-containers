@@ -95,6 +95,7 @@ WantedBy=default.target
         ("install-tools.sh", (HERE / "install-tools.sh").read_text(), "0755"),
         ("install-dev-tools.sh", (HERE / "install-dev-tools.sh").read_text(), "0755"),
         ("install-monitoring.sh", (HERE / "install-monitoring.sh").read_text(), "0755"),
+        ("install-share-guard.sh", (HERE / "install-share-guard.sh").read_text(), "0755"),
         ("mise.toml", (HERE / "mise.toml").read_text(), "0644"),
         ("guest-setup.sh", (HERE / "guest-setup.sh").read_text(), "0755"),
         ("t3.service", service, "0644"),
