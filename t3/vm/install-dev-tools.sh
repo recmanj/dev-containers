@@ -21,7 +21,7 @@ curl --retry 5 --retry-delay 2 -fsSL https://astral.sh/uv/install.sh -o "$downlo
 UV_INSTALL_DIR="$HOME/.local/bin" UV_NO_MODIFY_PATH=1 sh "$download_dir/uv.sh"
 curl --retry 5 --retry-delay 2 -fsSL https://mise.run -o "$download_dir/mise.sh"
 # renovate: datasource=github-releases depName=jdx/mise
-mise_version=v2026.11.4
+mise_version=v2026.11.5
 MISE_VERSION=$mise_version MISE_INSTALL_PATH="$HOME/.local/bin/mise" sh "$download_dir/mise.sh"
 mise use --global node@24
 
