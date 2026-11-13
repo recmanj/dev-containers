@@ -5,7 +5,7 @@ FROM ghcr.io/recmanj/dev-containers/claude:${BASE_TAG}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
-ARG T3CODE_VERSION=0.1.7
+ARG T3CODE_VERSION=0.1.8
 RUN mkdir -p ~/.local/share/t3 \
     && curl -fsSL "https://github.com/pingdotgg/t3code/releases/download/v${T3CODE_VERSION}/t3-${T3CODE_VERSION}-linux-x64.tar.gz" \
     | tar -xz --strip-components=1 -C ~/.local/share/t3 \
