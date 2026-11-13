@@ -58,7 +58,7 @@ RUN curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/k
 
 # Install pixi
 # renovate: datasource=github-releases depName=prefix-dev/pixi
-ARG PIXI_VERSION=0.84.1
+ARG PIXI_VERSION=0.84.2
 RUN case "${TARGETARCH}" in \
         amd64) PIXI_ARCH=x86_64 ;; \
         arm64) PIXI_ARCH=aarch64 ;; \
