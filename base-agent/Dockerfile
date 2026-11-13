@@ -5,7 +5,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG USER=dev
 # renovate: datasource=npm depName=@playwright/mcp
-ARG PLAYWRIGHT_MCP_VERSION=0.0.84
+ARG PLAYWRIGHT_MCP_VERSION=0.0.85
 # renovate: datasource=github-releases depName=rtk-ai/rtk
 ARG RTK_VERSION=v1.2.0
 
