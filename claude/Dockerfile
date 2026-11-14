@@ -12,7 +12,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_CODE_VERSION}
 
 # Codex is included for t3, which runs both agents from this image.
 # renovate: datasource=npm depName=@openai/codex
-ARG CODEX_CLI_VERSION=0.167.0
+ARG CODEX_CLI_VERSION=0.167.1
 
 USER root
 RUN apt-get update \
