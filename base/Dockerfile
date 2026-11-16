@@ -1,5 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
-FROM alpine/helm:4.3.1 AS helm
+FROM alpine/helm:4.3.2 AS helm
 FROM debian:trixie
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
