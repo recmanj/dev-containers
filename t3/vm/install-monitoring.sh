@@ -13,7 +13,7 @@ if ! systemd-detect-virt --vm --quiet; then
 fi
 
 # renovate: datasource=github-releases depName=henrygd/beszel extractVersion=^v(?<version>.*)$
-beszel_version=0.21.1
+beszel_version=0.21.2
 base_url="https://github.com/henrygd/beszel/releases/download/v${beszel_version}"
 install_dir="$HOME/.local/share/beszel"
 unit_dir="$HOME/.config/systemd/user"
