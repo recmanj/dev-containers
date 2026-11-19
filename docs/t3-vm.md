@@ -235,6 +235,12 @@ by Renovate, so T3 can use OpenRouter and other models. Add a key with
 `pi auth login openrouter` or in `~/.pi/agent/auth.json`, then refresh the
 providers in T3's settings.
 
+It also installs [pi-permit](https://github.com/recmanj/pi-permit), which
+decides which Pi tool calls run, ask or are denied, following the thread's
+permission mode in T3. That repository is private: run `gh auth login` before
+the script, or run the script again afterwards. Rules go in
+`~/.pi/agent/permissions.json`.
+
 The mise tools are pinned in `t3/vm/mise.toml`, which Renovate keeps current.
 The script copies it to `~/.config/mise/conf.d/t3-vm.toml`. To pick up new
 versions, pull this repository and re-run the script. uv tools update to
