@@ -39,6 +39,13 @@ uv tool install --upgrade ansible-core --with ansible
 uv tool install --upgrade ansible-lint
 uv tool install --upgrade pre-commit
 
+# Pi, for OpenRouter and other models in T3. Installed like Codex, outside
+# mise's Node, so it survives a Node upgrade. --ignore-scripts matches the
+# official installer. Credentials and settings stay in ~/.pi/agent.
+# renovate: datasource=npm depName=@earendil-works/pi-coding-agent
+pi_version=1.5.2
+npm install --global --prefix "$HOME/.local" --ignore-scripts "@earendil-works/pi-coding-agent@$pi_version"
+
 # Shims select project versions even without interactive shell activation.
 # shellcheck disable=SC2016 # Expand HOME and PATH when the shell reads the profile.
 path_line='export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"'
@@ -63,4 +70,5 @@ mise ls --global --current
 ansible --version | sed -n 1p
 ansible-lint --version | sed -n 1p
 pre-commit --version
+pi --version
 echo 'Tools installed. Reconnect SSH; reload and restart t3.service when ready.'

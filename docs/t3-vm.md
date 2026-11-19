@@ -230,6 +230,11 @@ tflint. uv installs Ansible, ansible-lint and pre-commit. There is no cloud CLI
 and no cloud credentials, so agents can render, lint and validate, and test
 against a local kind cluster, but not reach real infrastructure.
 
+The script also installs [Pi](https://pi.dev), pinned in the script and updated
+by Renovate, so T3 can use OpenRouter and other models. Add a key with
+`pi auth login openrouter` or in `~/.pi/agent/auth.json`, then refresh the
+providers in T3's settings.
+
 The mise tools are pinned in `t3/vm/mise.toml`, which Renovate keeps current.
 The script copies it to `~/.config/mise/conf.d/t3-vm.toml`. To pick up new
 versions, pull this repository and re-run the script. uv tools update to
