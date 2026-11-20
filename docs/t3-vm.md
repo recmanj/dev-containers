@@ -143,6 +143,55 @@ agent worktrees first: each is a full checkout with its own dependencies.
 On the host, `du --inodes -d2 <share> | sort -n | tail` finds them and
 `git worktree remove` deletes one.
 
+## Pi auto mode
+
+pi-permit's auto mode lets classifier models approve Pi tool calls that would
+otherwise prompt in T3; pick **auto** in a thread's permission selector. The
+first model runs on the host's GPU through a llama.cpp router; the VM reaches
+it over the libvirt bridge, so the VM needs no GPU and no extra memory.
+
+On the host, start the router on the bridge address with an API key. The
+address exists once libvirt's `default` network is up:
+
+```sh
+mkdir -p ~/.config/llama && (umask 077; openssl rand -hex 32 > ~/.config/llama/api-key)
+llama serve --host 192.168.122.1 --port 9931 --api-key "$(cat ~/.config/llama/api-key)" \
+  -ngl all -c 8192
+```
+
+With UFW, let only the VM reach it:
+
+```sh
+sudo ufw allow in on virbr0 from 192.168.122.50 to any port 9931 proto tcp
+```
+
+The router may also serve the chat models other tools use; loading a large one
+can unload the classifier, and the next check then waits for it to load.
+
+In the VM, run `pi`, then `/login llama.cpp` with
+`http://192.168.122.1:9931` and the key. Load a decision model with `/llama`,
+**Download model…**, for example `ggml-org/Clef-Flash-GGUF:Q4_K_M` (6.7 GB,
+Apache-2.0), or `ggml-org/Kev-4B-GGUF:Q8_0` (4.5 GB) if that does not fit in
+video memory next to the context. Use the ID `/llama` shows in
+`~/.pi/agent/permissions.json`, with a cloud model after it for calls the
+local one is unsure about:
+
+```json
+{
+  "permissions": {
+    "auto": {
+      "classifiers": ["llama.cpp/Clef-Flash-Q4_K_M", "openrouter/cloudflare/clef"],
+      "guidance": "A development VM with no cloud credentials. Local Docker and kind clusters are fine."
+    }
+  }
+}
+```
+
+Then run `/permissions test` in Pi: it scores each model on fixed safe and
+unsafe calls and shows the time per call. A model that allows unsafe calls is
+not fit for the first place; raise `allowAbove` or choose another. Decisions
+are logged to `~/.pi/agent/permit/audit.jsonl`.
+
 ## Monitoring
 
 [Beszel](https://beszel.dev) runs in the VM: a dashboard on port 8090 and an
@@ -239,7 +288,8 @@ It also installs [pi-permit](https://github.com/recmanj/pi-permit), which
 decides which Pi tool calls run, ask or are denied, following the thread's
 permission mode in T3. That repository is private: run `gh auth login` before
 the script, or run the script again afterwards. Rules go in
-`~/.pi/agent/permissions.json`.
+`~/.pi/agent/permissions.json`; see [Pi auto mode](#pi-auto-mode) for T3's
+**auto** selector.
 
 The mise tools are pinned in `t3/vm/mise.toml`, which Renovate keeps current.
 The script copies it to `~/.config/mise/conf.d/t3-vm.toml`. To pick up new
