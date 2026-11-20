@@ -8,7 +8,7 @@ ENV PATH="/home/${USER}/.opencode/bin:${PATH}"
 
 # The opencode-ai npm package and this installer only carry OpenCode 1.
 # renovate: datasource=npm depName=opencode-ai
-ARG OPENCODE_VERSION=1.19.5
+ARG OPENCODE_VERSION=1.19.6
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --version "${OPENCODE_VERSION}" \
     && opencode --version
 
