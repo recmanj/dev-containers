@@ -38,7 +38,7 @@ ARG TARGETARCH
 
 # Install GitHub CLI
 # renovate: datasource=github-releases depName=cli/cli
-ARG GH_VERSION=2.104.0
+ARG GH_VERSION=2.105.0
 RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
     | tar -C /usr/local -xz --strip-components=1 --wildcards '*/bin/*' '*/share/*'
 
