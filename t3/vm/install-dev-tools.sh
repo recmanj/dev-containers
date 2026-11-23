@@ -21,7 +21,7 @@ curl --retry 5 --retry-delay 2 -fsSL https://astral.sh/uv/install.sh -o "$downlo
 UV_INSTALL_DIR="$HOME/.local/bin" UV_NO_MODIFY_PATH=1 sh "$download_dir/uv.sh"
 curl --retry 5 --retry-delay 2 -fsSL https://mise.run -o "$download_dir/mise.sh"
 # renovate: datasource=github-releases depName=jdx/mise
-mise_version=v2026.11.10
+mise_version=v2026.11.11
 MISE_VERSION=$mise_version MISE_INSTALL_PATH="$HOME/.local/bin/mise" sh "$download_dir/mise.sh"
 mise use --global node@24
 
@@ -43,7 +43,7 @@ uv tool install --upgrade pre-commit
 # mise's Node, so it survives a Node upgrade. --ignore-scripts matches the
 # official installer. Credentials and settings stay in ~/.pi/agent.
 # renovate: datasource=npm depName=@earendil-works/pi-coding-agent
-pi_version=1.5.2
+pi_version=1.6.0
 npm install --global --prefix "$HOME/.local" --ignore-scripts "@earendil-works/pi-coding-agent@$pi_version"
 
 # Permission rules for Pi, which otherwise asks about every tool call in T3 or
